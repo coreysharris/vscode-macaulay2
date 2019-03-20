@@ -3,6 +3,10 @@
 	"displayName": "Macaulay2",
 	"description": "Macaulay2 language support",
 	"version": "0.0.1",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/coreysharris/vscode-macaulay2"
+	},
 	"engines": {
 		"vscode": "^1.32.0"
 	},
