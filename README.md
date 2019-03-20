@@ -4,10 +4,11 @@ This extension provides support for the Macaulay2 language in Visual Studio Code
 
 ## Features
 
-<!-- ### Now available -->
+### Now available
+- A language grammar (and syntax highlighting)
+![syntax highlighting](./images/syntaxHighlighting.png)
 
 ### Coming soon
-- A language grammar (and syntax highlighting)
 - Code completion with IntelliSense
 - An integrated REPL
 

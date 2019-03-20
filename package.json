@@ -7,10 +7,10 @@
 		"vscode": "^1.32.0"
 	},
 	"categories": [
-		"Other"
+		"Programming Languages"
 	],
 	"activationEvents": [
-		"onCommand:extension.helloWorld"
+		"onLanguage:macaulay2"
 	],
 	"main": "./out/extension.js",
 	"contributes": {
@@ -18,6 +18,24 @@
 			{
 				"command": "extension.helloWorld",
 				"title": "Hello World"
+			}
+		],
+		"grammars": [
+			{
+				"language": "macaulay2",
+				"scopeName": "source.macaulay2",
+				"path": "./syntaxes/macaulay2.tmLanguage.json"
+			}
+		],
+		"languages": [
+			{
+                "id": "macaulay2",
+                "aliases": [
+                    "Macaulay2",
+                    "macaulay2"
+                ],
+                "extensions": [".m2"],
+                "configuration": "./language-configuration.json"
 			}
 		]
 	},
