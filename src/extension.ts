@@ -3,9 +3,7 @@
 'use strict';
 
 import * as vscode from 'vscode';
-import {
-	provideCompletions
-} from "./completionProviders";
+import * as completions from "./completionProviders";
 import * as repl from "./repl";
 
 // this method is called when your extension is activated
@@ -16,8 +14,7 @@ export function activate(context: vscode.ExtensionContext) {
 	// This line of code will only be executed once when your extension is activated
 	console.log('Congratulations, your extension "macaulay2" is now active!');
 
-	provideCompletions(context);
-
+	completions.activate(context);
 	repl.activate(context);
 
 }

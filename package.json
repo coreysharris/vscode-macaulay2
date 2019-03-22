@@ -16,7 +16,6 @@
 	],
 	"activationEvents": [
 		"onLanguage:macaulay2",
-		"onCommand:macaulay2.startM2",
 		"onCommand:macaulay2.startREPL",
         "onCommand:macaulay2.executeMacaulay2CodeInREPL"
 	],
