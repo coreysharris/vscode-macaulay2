@@ -2,11 +2,12 @@
 	"name": "macaulay2",
 	"displayName": "Macaulay2",
 	"description": "Macaulay2 language support",
-	"version": "0.0.1",
+	"version": "0.0.2",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/coreysharris/vscode-macaulay2"
 	},
+	"publisher": "coreysharris",
 	"engines": {
 		"vscode": "^1.32.0"
 	},
@@ -14,14 +15,21 @@
 		"Programming Languages"
 	],
 	"activationEvents": [
-		"onLanguage:macaulay2"
+		"onLanguage:macaulay2",
+		"onCommand:macaulay2.startM2",
+		"onCommand:macaulay2.startREPL",
+        "onCommand:macaulay2.executeMacaulay2CodeInREPL"
 	],
 	"main": "./out/extension.js",
 	"contributes": {
 		"commands": [
 			{
-				"command": "extension.helloWorld",
-				"title": "Hello World"
+				"command": "macaulay2.startREPL",
+				"title": "Start M2 REPL"
+			},
+			{
+				"command": "macaulay2.sendToREPL",
+				"title": "Send code to Macaulay2 REPL"
 			}
 		],
 		"grammars": [
@@ -40,6 +48,26 @@
                 ],
                 "extensions": [".m2"],
                 "configuration": "./language-configuration.json"
+			}
+		],
+		"configuration": {
+				"title": "Macaulay2",
+				"properties": {
+					"macaulay2.executablePath": {
+						"type":"string",
+						"default":"/Applications/Macaulay2-1.13/bin/m2",
+						"description": "Location of Macaulay2 executable",
+						"scope": "application"
+					}
+				}
+		},
+		"keybindings": [{
+				"command": "macaulay2.sendToREPL",
+				"key": "alt+Enter"
+			},
+			{
+				"command": "macaulay2.startREPL",
+				"key": "F12"
 			}
 		]
 	},
