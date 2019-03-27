@@ -70,7 +70,7 @@
       "patterns": [
         {
           "name": "comment.line.double-dash.macaulay2",
-          "begin": "^\\s*--",
+          "begin": "--",
           "end": "$"
         },
         {
