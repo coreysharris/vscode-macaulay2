@@ -9,10 +9,10 @@
       "include": "#comments"
     },
     {
-      "include": "#keywords"
+      "include": "#strings"
     },
     {
-      "include": "#strings"
+      "include": "#keywords"
     },
     {
       "include": "#support"
@@ -56,13 +56,22 @@
       ]
     },
     "strings": {
-      "name": "string.quoted.double.macaulay2",
-      "begin": "\"",
-      "end": "\"",
       "patterns": [
         {
-          "name": "constant.character.escape.macaulay2",
-          "match": "\\\\."
+          "name": "string.quoted.double.macaulay2",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.macaulay2",
+              "match": "\\\\."
+            }
+          ]
+        },
+        {
+          "name": "string.tripleslash.macaulay2",
+          "begin": "///",
+          "end": "///"
         }
       ]
     },
@@ -75,6 +84,11 @@
         },
         {
           "name": "comment.block.macaulay2",
+          "begin": "-\\*",
+          "end": "\\*-"
+        },
+        {
+          "name": "comment.block.macaulay2.deprecated",
           "begin": "{\\*",
           "end": "\\*}"
         }

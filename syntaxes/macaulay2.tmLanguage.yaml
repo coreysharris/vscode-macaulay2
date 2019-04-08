@@ -4,8 +4,8 @@ fileTypes: [m2]
 
 patterns:
 - include: '#comments'
-- include: '#keywords'
 - include: '#strings'
+- include: '#keywords'
 - include: '#support'
 
 # variables:
@@ -31,19 +31,27 @@ repository:
       - name: keyword.operator.arithmetic.macaulay2
         match: '%|\*|/|//|-|\+|\\'
   strings:
-    name: string.quoted.double.macaulay2
-    begin: '"'
-    end: '"'
     patterns:
-      - name: constant.character.escape.macaulay2
-        match: "\\\\."
-        # match: "///\\(/?/?[^/]\\|\\(//\\)*////[^/]\\)*\\(//\\)*///"
+      - name: string.quoted.double.macaulay2
+        begin: '"'
+        end: '"'
+        patterns:
+          - name: constant.character.escape.macaulay2
+            match: "\\\\."
+      - name: string.tripleslash.macaulay2
+        begin: "///"
+        end: "///"
+      # - name: string.tripleslash2.macaulay2
+      #   match: "///\\(/?/?[^/]\\|\\(//\\)*////[^/]\\)*\\(//\\)*///"
   comments:
     patterns:
       - name: comment.line.double-dash.macaulay2
         begin: --
         end: $
       - name: comment.block.macaulay2
+        begin: '-\*'
+        end: '\*-'
+      - name: comment.block.macaulay2.deprecated
         begin: '{\*'
         end: '\*}'
   support:
