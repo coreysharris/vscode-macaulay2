@@ -9,13 +9,22 @@ function startREPLCommand(context: vscode.ExtensionContext) {
 }
 
 async function startREPL(preserveFocus: boolean) {
+    console.log("function startREPL called...");
     if (g_terminal === undefined) {
         let exepath = vscode.workspace.getConfiguration("macaulay2").get<string>("executablePath");
+        // console.log(`Starting REPL in ${fileDirname} based on current file of ${file}`);
+        let editor = vscode.window.activeTextEditor;
+        let fullpath = editor!.document.uri.path;
+        let dirarray = fullpath.split("/");
+        dirarray.pop();
+        let dirpath = dirarray.join("/");
+	    console.log(`dirpath: ${dirpath}`);
         g_terminal = vscode.window.createTerminal({
             name: "macaulay2",
             shellPath: exepath,
             shellArgs: [],
-            env: {}
+            env: {},
+            cwd: `${dirpath}`
         });
     }
     g_terminal.show(preserveFocus);
