@@ -2,22 +2,20 @@
 	"name": "macaulay2",
 	"displayName": "Macaulay2",
 	"description": "Macaulay2 language support",
-	"version": "0.0.3",
+	"version": "0.0.4",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/coreysharris/vscode-macaulay2"
 	},
 	"publisher": "coreysharris",
 	"engines": {
-		"vscode": "^1.32.0"
+		"vscode": "^1.36.0"
 	},
 	"categories": [
 		"Programming Languages"
 	],
 	"activationEvents": [
-		"onLanguage:macaulay2",
-		"onCommand:macaulay2.startREPL",
-        "onCommand:macaulay2.executeMacaulay2CodeInREPL"
+		"onLanguage:macaulay2"
 	],
 	"main": "./out/extension.js",
 	"contributes": {
@@ -40,27 +38,30 @@
 		],
 		"languages": [
 			{
-                "id": "macaulay2",
-                "aliases": [
-                    "Macaulay2",
-                    "macaulay2"
-                ],
-                "extensions": [".m2"],
-                "configuration": "./language-configuration.json"
+				"id": "macaulay2",
+				"aliases": [
+					"Macaulay2",
+					"macaulay2"
+				],
+				"extensions": [
+					".m2"
+				],
+				"configuration": "./language-configuration.json"
 			}
 		],
 		"configuration": {
-				"title": "Macaulay2",
-				"properties": {
-					"macaulay2.executablePath": {
-						"type":"string",
-						"default":"/Applications/Macaulay2-1.13/bin/m2",
-						"description": "Location of Macaulay2 executable",
-						"scope": "application"
-					}
+			"title": "Macaulay2",
+			"properties": {
+				"macaulay2.executablePath": {
+					"type": "string",
+					"default": "/Applications/Macaulay2-1.13/bin/m2",
+					"description": "Location of Macaulay2 executable",
+					"scope": "application"
 				}
+			}
 		},
-		"keybindings": [{
+		"keybindings": [
+			{
 				"command": "macaulay2.sendToREPL",
 				"key": "alt+Enter"
 			},
@@ -74,12 +75,12 @@
 		"vscode:prepublish": "npm run compile",
 		"compile": "tsc -p ./",
 		"watch": "tsc -watch -p ./",
-		"postinstall": "node ./node_modules/vscode/bin/install",
 		"test": "npm run compile && node ./node_modules/vscode/bin/test"
 	},
 	"devDependencies": {
 		"typescript": "^3.3.1",
-		"vscode": "^1.1.28",
+		"vscode-test": "^1.0.0",
+		"@types/vscode": "^1.36.0",
 		"tslint": "^5.12.1",
 		"@types/node": "^10.12.21",
 		"@types/mocha": "^2.2.42"
