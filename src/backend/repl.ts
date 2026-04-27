@@ -3,6 +3,7 @@ import * as fs from "fs";
 import * as path from "path";
 
 import { spawn, ChildProcess } from "child_process";
+import { resolveM2Executable } from "./executablePath";
 
 let g_context: vscode.ExtensionContext | undefined;
 let g_panel: vscode.WebviewPanel | undefined;
@@ -10,15 +11,29 @@ let proc: ChildProcess | undefined;
 let procWorkingDir: string | undefined;
 
 function startM2() {
-  let exepath = vscode.workspace
+  const configuredPath = vscode.workspace
     .getConfiguration("macaulay2")
     .get<string>("executablePath");
-  if (!exepath) {
-    vscode.window.showErrorMessage(
-      "Macaulay2 executable path is not set. Please configure 'macaulay2.executablePath' in your settings.",
-    );
+  const resolution = resolveM2Executable(configuredPath);
+  if (!resolution) {
+    const action = "Open Settings";
+    vscode.window
+      .showErrorMessage(
+        "Could not locate the Macaulay2 executable automatically. Install Macaulay2 so the M2 command is available, or set 'macaulay2.executablePath' manually.",
+        action,
+      )
+      .then((selectedAction) => {
+        if (selectedAction === action) {
+          vscode.commands.executeCommand(
+            "workbench.action.openSettings",
+            "macaulay2.executablePath",
+          );
+        }
+      });
     return;
   }
+  const exepath = resolution.executablePath;
+  console.log(`Using M2 executable from ${resolution.source}: ${exepath}`);
 
   // Determine the working directory for Macaulay2
   let workingDir: string;
