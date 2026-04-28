@@ -64,8 +64,8 @@
 			"properties": {
 				"macaulay2.executablePath": {
 					"type": "string",
-					"default": "M2",
-					"description": "Location of Macaulay2 executable",
+					"default": "",
+					"description": "Optional override for the Macaulay2 executable. Leave empty to auto-detect it.",
 					"scope": "application"
 				}
 			}
