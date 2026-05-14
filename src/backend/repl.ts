@@ -587,6 +587,34 @@ function parseVSCodeFragment(pathWithFragment: string): {
   return result;
 }
 
+function interruptM2() {
+  console.log("interrupt");
+  if (!proc) return;
+
+  try {
+    // Best-effort: send SIGINT to the child process so it can interrupt computations.
+    proc.kill("SIGINT");
+  } catch (e) {
+    console.error("Failed to send SIGINT to M2 process:", e);
+    // On Windows, proc.kill('SIGINT') may not work. Attempt taskkill as a fallback.
+    if (process.platform === "win32" && proc.pid) {
+      try {
+        const killer = spawn("taskkill", [
+          "/PID",
+          String(proc.pid),
+          "/T",
+          "/F",
+        ]);
+        killer.on("close", () => {
+          console.log("taskkill executed for pid", proc!.pid);
+        });
+      } catch (ee) {
+        console.error("taskkill fallback failed:", ee);
+      }
+    }
+  }
+}
+
 function handleWebviewMessage(message: any) {
   switch (message.type) {
     case "input":
@@ -599,31 +627,7 @@ function handleWebviewMessage(message: any) {
       startM2();
       break;
     case "interrupt":
-      console.log("interrupt");
-      if (proc) {
-        try {
-          // Best-effort: send SIGINT to the child process so it can interrupt computations.
-          proc.kill("SIGINT");
-        } catch (e) {
-          console.error("Failed to send SIGINT to M2 process:", e);
-          // On Windows, proc.kill('SIGINT') may not work. Attempt taskkill as a fallback.
-          if (process.platform === "win32" && proc.pid) {
-            try {
-              const killer = spawn("taskkill", [
-                "/PID",
-                String(proc.pid),
-                "/T",
-                "/F",
-              ]);
-              killer.on("close", () => {
-                console.log("taskkill executed for pid", proc!.pid);
-              });
-            } catch (ee) {
-              console.error("taskkill fallback failed:", ee);
-            }
-          }
-        }
-      }
+      interruptM2();
       break;
     case "open":
       console.log("open " + message.data);
@@ -677,6 +681,9 @@ export function activate(context: vscode.ExtensionContext) {
   );
   context.subscriptions.push(
     vscode.commands.registerCommand("macaulay2.sendToREPL", executeSelection),
+  );
+  context.subscriptions.push(
+    vscode.commands.registerCommand("macaulay2.interruptREPL", interruptM2),
   );
 }
 

@@ -27,6 +27,10 @@
 			{
 				"command": "macaulay2.sendToREPL",
 				"title": "Send code to Macaulay2 REPL"
+			},
+			{
+				"command": "macaulay2.interruptREPL",
+				"title": "Interrupt M2 Computation"
 			}
 		],
 		"grammars": [
@@ -67,6 +71,12 @@
 					"default": "",
 					"description": "Optional override for the Macaulay2 executable. Leave empty to auto-detect it.",
 					"scope": "application"
+				},
+				"macaulay2.interruptOnControlC": {
+					"type": "boolean",
+					"default": true,
+					"description": "Enable Ctrl+C as an interrupt shortcut in the Macaulay2 REPL webview on macOS. The interrupt command remains available for custom keybindings when this is disabled.",
+					"scope": "application"
 				}
 			}
 		},
@@ -79,6 +89,11 @@
 			{
 				"command": "macaulay2.startREPL",
 				"key": "F12"
+			},
+			{
+				"command": "macaulay2.interruptREPL",
+				"key": "ctrl+c",
+				"when": "isMac && config.macaulay2.interruptOnControlC && activeWebviewPanelId == 'macaulay2Output'"
 			}
 		],
 		"problemMatchers": [
