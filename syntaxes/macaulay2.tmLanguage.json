@@ -9,6 +9,9 @@
       "include": "#comments"
     },
     {
+      "include": "#documentation"
+    },
+    {
       "include": "#strings"
     },
     {
@@ -59,11 +62,39 @@
               "match": "\\\\."
             }
           ]
-        },
+        }
+      ]
+    },
+    "documentation": {
+      "patterns": [
         {
-          "name": "string.tripleslash.macaulay2",
+          "name": "meta.documentation.tripleslash.macaulay2",
           "begin": "///",
-          "end": "///"
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.documentation.begin.macaulay2"
+            }
+          },
+          "end": "///",
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.documentation.end.macaulay2"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#comments"
+            },
+            {
+              "include": "#strings"
+            },
+            {
+              "include": "#keywords"
+            },
+            {
+              "include": "#support"
+            }
+          ]
         }
       ]
     },
