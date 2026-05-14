@@ -500,6 +500,8 @@ const Shell = function (
       renderMathInElement(htmlSec, {
         strict: false,
         trust: true,
+        // Dense Macaulay2 output can contain thousands of thin-space macros.
+        maxExpand: 100000,
         delimiters: [{ left: "$", right: "$", display: false }],
       });
       // syntax highlighting code
