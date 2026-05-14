@@ -139,7 +139,7 @@ const Shell = function (
     if (inputSpan) inputSpan.remove(); // parentElement.removeChild(inputSpan);
     inputSpan = document.createElement("span");
     //inputSpan = document.createElement("input"); // interesting idea but creates tons of problems
-    inputSpan.contentEditable = true; // inputSpan.setAttribute("contentEditable",true);
+    inputSpan.contentEditable = "plaintext-only";
     inputSpan.spellcheck = false; // sadly this or any of the following attributes are not recognized in contenteditable :(
     inputSpan.autocapitalize = "off";
     inputSpan.autocorrect = "off";
@@ -200,6 +200,23 @@ const Shell = function (
   };
   const htmlToM2 = function (el: HTMLElement) {
     return el.textContent.replace("−", "-");
+  };
+  const clipboardText = function (data: DataTransfer | null) {
+    return data ? data.getData("text/plain").replace(/\t/g, "    ") : "";
+  };
+  const shouldHandlePlainTextPaste = function (target: EventTarget | null) {
+    if (!inputSpan) return false;
+    const el = target instanceof HTMLElement ? target : null;
+    if (el && el !== inputSpan && !inputSpan.contains(el)) {
+      if (el.tagName == "INPUT" || el.tagName == "TEXTAREA") return false;
+      if (el.isContentEditable) return false;
+    }
+    return true;
+  };
+  const insertPlainText = function (txt: string) {
+    setCaretAtEndMaybe(inputSpan, true);
+    document.execCommand("insertText", false, txt);
+    scrollDown(terminal);
   };
 
   const maxCompletionItems = 50;
@@ -485,17 +502,26 @@ const Shell = function (
     } else return false;
   };
 
-  /*
   terminal.onpaste = function (e) {
-    if (!inputSpan) return;
-    setCaretAtEndMaybe(inputSpan, true);
+    if (!shouldHandlePlainTextPaste(e.target)) return;
     e.preventDefault();
-    const txt = e.clipboardData.getData("text/plain").replace(/\t/g, "    "); // chrome doesn't like \t
-    // paste w/o formatting
-    document.execCommand("insertText", false, txt);
-    scrollDown(terminal);
-    };
-   */
+    insertPlainText(clipboardText(e.clipboardData));
+  };
+
+  terminal.addEventListener("beforeinput", function (e: InputEvent) {
+    if (
+      e.inputType !== "insertFromPaste" &&
+      e.inputType !== "insertFromDrop"
+    )
+      return;
+    if (
+      !shouldHandlePlainTextPaste(e.target) ||
+      document.activeElement != inputSpan
+    )
+      return;
+    e.preventDefault();
+    insertPlainText(clipboardText(e.dataTransfer));
+  });
 
   terminal.onclick = function (e) {
     if (!inputSpan) return;

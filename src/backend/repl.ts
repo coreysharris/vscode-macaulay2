@@ -156,19 +156,20 @@ function startM2() {
   // Previously we used a shell with `2>&1` which merged stderr/stdout but prevented
   // SIGINT from interrupting the actual M2 process. Listening to both stdout and
   // stderr separately preserves output while allowing interrupts to work.
-  proc = spawn(exepath, ["--webapp", "-e", getM2StartupExpression()], {
+  const child = spawn(exepath, ["--webapp", "-e", getM2StartupExpression()], {
     cwd: workingDir,
   });
-  console.log("M2 process started (pid=", proc.pid, ")");
+  proc = child;
+  console.log("M2 process started (pid=", child.pid, ")");
 
   procWorkingDir = workingDir;
 
-  proc.stdout.on("data", (data) => {
+  child.stdout.on("data", (data) => {
     if (g_panel)
       g_panel.webview.postMessage({ type: "output", data: data.toString() });
   });
 
-  proc.stderr.on("data", (data) => {
+  child.stderr.on("data", (data) => {
     // forward stderr as output too
     console.log("M2 stderr:", data.toString());
     if (g_panel)
@@ -179,20 +180,20 @@ function startM2() {
       });
   });
 
-  proc.on("error", (err) => {
+  child.on("error", (err) => {
     console.error("M2 process error:", err);
     if (g_panel)
       g_panel.webview.postMessage({
         type: "output",
         data: `Error starting Macaulay2: ${err.message}`,
       });
-    proc = undefined;
+    if (proc === child) proc = undefined;
   });
 
-  proc.on("close", (code, signal) => {
+  child.on("close", (code, signal) => {
     console.log("M2 process closed. code=", code, "signal=", signal);
     if (g_panel) g_panel.webview.postMessage({ type: "exit", code, signal });
-    proc = undefined;
+    if (proc === child) proc = undefined;
   });
 
   /*
