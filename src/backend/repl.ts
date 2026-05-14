@@ -759,6 +759,15 @@ function handleWebviewMessage(message: any) {
     case "interrupt":
       interruptM2();
       break;
+    case "paste":
+      vscode.env.clipboard.readText().then(
+        (text) => {
+          if (g_panel)
+            g_panel.webview.postMessage({ type: "paste", data: text });
+        },
+        (err) => console.error("Failed to read clipboard:", err),
+      );
+      break;
     case "open":
       console.log("open " + message.data);
       // fix relative path: relative to where M2 was started

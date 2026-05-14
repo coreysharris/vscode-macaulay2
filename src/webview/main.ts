@@ -26,6 +26,9 @@ window.addEventListener("message", (event) => {
       // put focus back on editor:
       if (!myshell.openedHelp) vscode.postMessage({ type: "focus" });
       break;
+    case "paste":
+      myshell.receivePaste(message.data || "");
+      break;
   }
 });
 

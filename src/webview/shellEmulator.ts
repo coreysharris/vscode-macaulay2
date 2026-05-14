@@ -201,8 +201,14 @@ const Shell = function (
   const htmlToM2 = function (el: HTMLElement) {
     return el.textContent.replace("−", "-");
   };
+  const normalizePlainText = function (txt: string) {
+    return txt.replace(/\t/g, "    ");
+  };
   const clipboardText = function (data: DataTransfer | null) {
-    return data ? data.getData("text/plain").replace(/\t/g, "    ") : "";
+    return data ? normalizePlainText(data.getData("text/plain")) : "";
+  };
+  const hasPlainText = function (data: DataTransfer | null) {
+    return !!data && Array.from(data.types).indexOf("text/plain") >= 0;
   };
   const shouldHandlePlainTextPaste = function (target: EventTarget | null) {
     if (!inputSpan) return false;
@@ -217,6 +223,13 @@ const Shell = function (
     setCaretAtEndMaybe(inputSpan, true);
     document.execCommand("insertText", false, txt);
     scrollDown(terminal);
+  };
+  let lastClipboardPasteRequest = 0;
+  const requestClipboardPaste = function () {
+    const now = Date.now();
+    if (now - lastClipboardPasteRequest < 250) return;
+    lastClipboardPasteRequest = now;
+    emit("paste");
   };
 
   const maxCompletionItems = 50;
@@ -505,7 +518,11 @@ const Shell = function (
   terminal.onpaste = function (e) {
     if (!shouldHandlePlainTextPaste(e.target)) return;
     e.preventDefault();
-    insertPlainText(clipboardText(e.clipboardData));
+    if (hasPlainText(e.clipboardData)) {
+      insertPlainText(clipboardText(e.clipboardData));
+    } else {
+      requestClipboardPaste();
+    }
   };
 
   terminal.addEventListener("beforeinput", function (e: InputEvent) {
@@ -520,8 +537,17 @@ const Shell = function (
     )
       return;
     e.preventDefault();
-    insertPlainText(clipboardText(e.dataTransfer));
+    if (hasPlainText(e.dataTransfer)) {
+      insertPlainText(clipboardText(e.dataTransfer));
+    } else if (e.inputType == "insertFromPaste") {
+      requestClipboardPaste();
+    }
   });
+
+  obj.receivePaste = function (txt: string) {
+    if (!inputSpan) return;
+    insertPlainText(normalizePlainText(txt));
+  };
 
   terminal.onclick = function (e) {
     if (!inputSpan) return;
@@ -575,6 +601,18 @@ const Shell = function (
     )
       return;
     if (completionKeyHandling(e)) return;
+    if (
+      ((e.metaKey || e.ctrlKey) &&
+        !e.altKey &&
+        e.key.toLowerCase() == "v") ||
+      (e.shiftKey && e.key == "Insert")
+    ) {
+      if (shouldHandlePlainTextPaste(e.target)) {
+        e.preventDefault();
+        requestClipboardPaste();
+        return;
+      }
+    }
     if (e.key == "Enter") {
       if (!e.shiftKey) {
         obj.postMessage(htmlToM2(inputSpan));
