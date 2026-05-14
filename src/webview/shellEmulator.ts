@@ -66,6 +66,7 @@ const Shell = function (
   // we're using arguments as private variables, cf
   // https://stackoverflow.com/questions/18099129/javascript-using-arguments-for-closure-bad-or-good
   const obj = this; // for nested functions with their own 'this'. or one could use bind, or => functions, but simpler this way
+  obj.openedHelp = false;
   let htmlSec; // the current place in terminal where new stuff gets written
   let inputSpan = null; // the input HTML element at the bottom of the terminal. note that inputSpan should always have *one text node*
   const cmdHistory: any = []; // History of commands for terminal-like arrow navigation
@@ -84,6 +85,20 @@ const Shell = function (
       if (c[i].nodeType != 1 || !c[i].classList.contains("M2CellBar"))
         return false;
     return true;
+  };
+
+  const openHelp = function (url: string) {
+    obj.openedHelp = true;
+    emit("openHelp", url);
+  };
+
+  const isHtmlHelpLink = function (href: string) {
+    const path = href.split("#", 1)[0].split("?", 1)[0];
+    return (
+      /^file:\/\/.+\.html?$/i.test(path) ||
+      /^[a-zA-Z]:[\\/].+\.html?$/i.test(path) ||
+      (!/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(path) && /\.html?$/i.test(path))
+    );
   };
 
   const createHtml = function (className) {
@@ -259,14 +274,22 @@ const Shell = function (
         return;
       } else if (t instanceof HTMLAnchorElement) {
         const href = t.getAttribute("href");
+        if (!href) return;
         const [name, rowcols] = parseLocation(href);
         if (rowcols && name == "stdio") {
-            obj.selectPastInput(document.activeElement, rowcols);
-            e.preventDefault();
-          } else if ((!t.host || t.host == window.location.host))
-	    emit("open", href);  // calls to local files are redirected to editor
-        return;
+          obj.selectPastInput(document.activeElement, rowcols);
+          e.preventDefault();
+        } else if (isHtmlHelpLink(href)) {
+          e.preventDefault();
+          e.stopPropagation();
+          openHelp(href);
+        } else if (!t.host || t.host == window.location.host) {
+          e.preventDefault();
+          e.stopPropagation();
+          emit("open", href); // calls to local files are redirected to editor
         }
+        return;
+      }
       if (t.classList.contains("M2CellBar")) return;
       t = t.parentElement;
     }
@@ -497,9 +520,9 @@ const Shell = function (
       Array.from(
         htmlSec.querySelectorAll("a.auto") as NodeListOf<HTMLAnchorElement>,
       ).forEach((x) => {
-        let url = x.href; // or getAttribute?
+        let url = x.getAttribute("href") || x.href;
         console.log("Opening URL " + url);
-        x.click();
+        openHelp(url);
       });
       // error highlighting
       Array.from(
@@ -546,6 +569,9 @@ const Shell = function (
         });
         htmlSec.removeAttribute("data-id-list");
       }
+    } else if (htmlSec.classList.contains("M2Url")) {
+      const url = htmlSec.dataset.code;
+      if (url) openHelp(url);
     }
     htmlSec.removeAttribute("data-code");
     if (anc.classList.contains("M2Html") && anc.dataset.code != "") {
@@ -585,6 +611,7 @@ const Shell = function (
   };
 
   obj.displayOutput = function (msg: string) {
+    obj.openedHelp = false;
     if (procInputSpan !== null) {
       procInputSpan.remove();
       procInputSpan = null;
@@ -654,16 +681,16 @@ const Shell = function (
 
   const displayText = function (msg) {
     // Check if the message contains file paths with line numbers (Macaulay2 error format)
-    // Common patterns: "filename.m2:123:" or "filename.m2:123:456:" 
+    // Common patterns: "filename.m2:123:" or "filename.m2:123:456:"
     const errorPattern = /([^\s:]+\.m2):(\d+)(?::(\d+))?:/g;
-    
+
     if (errorPattern.test(msg)) {
       // Reset regex lastIndex for next use
       errorPattern.lastIndex = 0;
-      
+
       let lastIndex = 0;
       let match;
-      
+
       while ((match = errorPattern.exec(msg)) !== null) {
         // Add text before the match
         if (match.index > lastIndex) {
@@ -673,34 +700,34 @@ const Shell = function (
             htmlSec.insertBefore(textNode, inputSpan);
           else htmlSec.appendChild(textNode);
         }
-        
+
         // Create clickable link for the file path
         const [fullMatch, filePath, lineNum, colNum] = match;
-        const link = document.createElement('a');
+        const link = document.createElement("a");
         link.textContent = fullMatch;
-        link.href = '#';
-        link.style.color = '#4FC3F7';
-        link.style.textDecoration = 'underline';
-        link.style.cursor = 'pointer';
-        
+        link.href = "#";
+        link.style.color = "#4FC3F7";
+        link.style.textDecoration = "underline";
+        link.style.cursor = "pointer";
+
         // Build the VS Code fragment (file#line:column format)
-        let fragment = filePath + '#' + lineNum;
+        let fragment = filePath + "#" + lineNum;
         if (colNum) {
-          fragment += ':' + colNum;
+          fragment += ":" + colNum;
         }
-        
+
         link.onclick = (e) => {
           e.preventDefault();
-          emit('open', fragment);
+          emit("open", fragment);
         };
-        
+
         if (inputSpan && inputSpan.parentElement == htmlSec)
           htmlSec.insertBefore(link, inputSpan);
         else htmlSec.appendChild(link);
-        
+
         lastIndex = match.index + fullMatch.length;
       }
-      
+
       // Add remaining text after the last match
       if (lastIndex < msg.length) {
         const textAfter = msg.substring(lastIndex);
