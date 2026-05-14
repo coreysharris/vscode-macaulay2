@@ -1,5 +1,11 @@
 import { Shell } from "./shellEmulator.js";
 
+declare global {
+  interface Window {
+    macaulay2CompletionItems?: { label: string; kind: string }[];
+  }
+}
+
 // @ts-ignore
 const vscode = acquireVsCodeApi();
 
@@ -9,7 +15,7 @@ window.addEventListener("message", (event) => {
   const message = event.data;
   switch (message.type) {
     case "output":
-      myshell.displayOutput(message.data);
+      myshell.displayOutput(message.data, message.stream == "stderr");
       // next line is a hack: scroll is already performed by shellEmulator,
       // but it doesn't work on <body>, need to do it on its parent element instead
       if (outputElement && outputElement.parentElement) {
@@ -33,6 +39,7 @@ const myshell = new Shell(
   null,
   null,
   true,
+  window.macaulay2CompletionItems || [],
 );
 
 console.log("Shell created.");

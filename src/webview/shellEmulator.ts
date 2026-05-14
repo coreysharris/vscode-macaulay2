@@ -55,12 +55,18 @@ Array.prototype.sortedPush = function (el: any) {
   return this.length;
 };
 
+type CompletionItem = {
+  label: string;
+  kind: string;
+};
+
 const Shell = function (
   terminal: HTMLElement,
   emit: (type: string, msg?: string) => void, // should be renamed
   editor: HTMLElement,
   iFrame: HTMLFrameElement,
   createInputSpan: boolean,
+  completionItems: CompletionItem[] = [],
 ) {
   // Shell is an old-style javascript oop constructor
   // we're using arguments as private variables, cf
@@ -196,7 +202,239 @@ const Shell = function (
     return el.textContent.replace("−", "-");
   };
 
+  const maxCompletionItems = 50;
+  const seenCompletionLabels = new Set<string>();
+  const uniqueCompletionItems = completionItems.filter((item) => {
+    if (seenCompletionLabels.has(item.label)) return false;
+    seenCompletionLabels.add(item.label);
+    return true;
+  });
+  let completionMenu: HTMLUListElement | null = null;
+  let completionMatches: CompletionItem[] = [];
+  let completionStart = 0;
+  let completionSelected = 0;
+  let completionSelectionExplicit = false;
+
+  const completionMenuIsVisible = function () {
+    return completionMenu !== null && completionMenu.style.display != "none";
+  };
+
+  const ensureCompletionMenu = function () {
+    if (completionMenu) return completionMenu;
+
+    completionMenu = document.createElement("ul");
+    completionMenu.className = "M2CompletionMenu";
+    completionMenu.style.display = "none";
+    document.body.appendChild(completionMenu);
+    return completionMenu;
+  };
+
+  const getCompletionContext = function (allowEmptyPrefix = false) {
+    if (!inputSpan || document.activeElement != inputSpan) return null;
+
+    const caret = getCaret(inputSpan);
+    if (caret === null) return null;
+
+    const text = htmlToM2(inputSpan);
+    const beforeCaret = text.substring(0, caret);
+    const match = /(?:^|[^\w])(\w*)$/.exec(beforeCaret);
+    if (!match) return null;
+
+    const prefix = match[1];
+    if (!allowEmptyPrefix && prefix.length == 0) return null;
+
+    return {
+      caret,
+      prefix,
+      start: caret - prefix.length,
+      text,
+    };
+  };
+
+  const hideCompletionMenu = function () {
+    if (completionMenu) completionMenu.style.display = "none";
+    completionMatches = [];
+    completionSelectionExplicit = false;
+  };
+
+  const getCompletionMatches = function (prefix: string) {
+    if (uniqueCompletionItems.length == 0) return [];
+
+    const matches: CompletionItem[] = [];
+    for (const item of uniqueCompletionItems) {
+      if (item.label.startsWith(prefix)) {
+        matches.push(item);
+        if (matches.length >= maxCompletionItems) break;
+      }
+    }
+    return matches;
+  };
+
+  const getCompletionAnchorRect = function (caret: number) {
+    const nodeOffset = locateOffset(inputSpan, caret);
+    if (nodeOffset) {
+      const range = document.createRange();
+      range.setStart(nodeOffset[0], nodeOffset[1]);
+      range.collapse(true);
+      const rect = range.getBoundingClientRect();
+      if (rect.width || rect.height || rect.left || rect.top) return rect;
+    }
+    return inputSpan.getBoundingClientRect();
+  };
+
+  const positionCompletionMenu = function (caret: number) {
+    const menu = ensureCompletionMenu();
+    const rect = getCompletionAnchorRect(caret);
+    const margin = 4;
+    const width = menu.offsetWidth || 260;
+    const height = menu.offsetHeight || 0;
+    const left = Math.max(
+      margin,
+      Math.min(rect.left, window.innerWidth - width - margin),
+    );
+    const below = rect.bottom + margin;
+    const above = rect.top - height - margin;
+    const top =
+      below + height <= window.innerHeight || above < margin ? below : above;
+
+    menu.style.left = `${left}px`;
+    menu.style.top = `${Math.max(margin, top)}px`;
+  };
+
+  const setCompletionSelection = function (index: number) {
+    if (!completionMenu || completionMatches.length == 0) return;
+
+    completionSelected =
+      (index + completionMatches.length) % completionMatches.length;
+    completionSelectionExplicit = true;
+    Array.from(completionMenu.children).forEach((child, childIndex) => {
+      child.classList.toggle("selected", childIndex == completionSelected);
+    });
+    completionMenu.children[completionSelected]?.scrollIntoView({
+      block: "nearest",
+    });
+  };
+
+  const applyCompletion = function (index: number) {
+    const item = completionMatches[index];
+    const context = getCompletionContext(true);
+    if (!item || !context) return false;
+
+    inputSpan.textContent =
+      context.text.substring(0, completionStart) +
+      item.label +
+      context.text.substring(context.caret);
+    setCaret(inputSpan, completionStart + item.label.length);
+    hideCompletionMenu();
+    scrollDown(terminal);
+    return true;
+  };
+
+  const renderCompletionMenu = function () {
+    const menu = ensureCompletionMenu();
+    menu.textContent = "";
+
+    completionMatches.forEach((item, index) => {
+      const option = document.createElement("li");
+      option.className = "M2CompletionItem";
+      if (index == completionSelected) option.classList.add("selected");
+      option.addEventListener("mousedown", (event) => {
+        event.preventDefault();
+        applyCompletion(index);
+      });
+
+      const label = document.createElement("span");
+      label.className = "M2CompletionLabel";
+      label.textContent = item.label;
+      option.appendChild(label);
+
+      const kind = document.createElement("span");
+      kind.className = "M2CompletionKind";
+      kind.textContent = item.kind;
+      option.appendChild(kind);
+
+      menu.appendChild(option);
+    });
+  };
+
+  const showCompletionMenu = function (
+    allowEmptyPrefix = false,
+    selectionExplicit = false,
+  ) {
+    const context = getCompletionContext(allowEmptyPrefix);
+    if (!context) {
+      hideCompletionMenu();
+      return false;
+    }
+
+    const matches = getCompletionMatches(context.prefix);
+    if (matches.length == 0) {
+      hideCompletionMenu();
+      return false;
+    }
+
+    completionMatches = matches;
+    completionStart = context.start;
+    completionSelected = 0;
+    completionSelectionExplicit = selectionExplicit;
+    renderCompletionMenu();
+    ensureCompletionMenu().style.display = "block";
+    positionCompletionMenu(context.caret);
+    return true;
+  };
+
+  const completionKeyHandling = function (e: KeyboardEvent) {
+    if (!inputSpan || document.activeElement != inputSpan) return false;
+
+    if ((e.ctrlKey || e.metaKey) && e.code == "Space") {
+      showCompletionMenu(true, true);
+      e.preventDefault();
+      e.stopPropagation();
+      return true;
+    }
+
+    if (!completionMenuIsVisible()) return false;
+
+    switch (e.key) {
+      case "ArrowDown":
+        setCompletionSelection(completionSelected + 1);
+        e.preventDefault();
+        return true;
+      case "ArrowUp":
+        setCompletionSelection(completionSelected - 1);
+        e.preventDefault();
+        return true;
+      case "Enter":
+        if (e.shiftKey) return false;
+        if (!completionSelectionExplicit) return false;
+        if (applyCompletion(completionSelected)) {
+          e.preventDefault();
+          return true;
+        }
+        return false;
+      case "Tab":
+        if (applyCompletion(completionSelected)) {
+          e.preventDefault();
+          return true;
+        }
+        return false;
+      case "Escape":
+        hideCompletionMenu();
+        e.preventDefault();
+        return true;
+      case "ArrowLeft":
+      case "ArrowRight":
+      case "Home":
+      case "End":
+        hideCompletionMenu();
+        return false;
+      default:
+        return false;
+    }
+  };
+
   obj.postMessage = function (msg) {
+    hideCompletionMenu();
     // send input, adding \n if necessary
     const clean = sanitizeInput(msg);
     if (procInputSpan === null) {
@@ -310,6 +548,7 @@ const Shell = function (
       (e.target as HTMLElement).tagName == "INPUT"
     )
       return;
+    if (completionKeyHandling(e)) return;
     if (e.key == "Enter") {
       if (!e.shiftKey) {
         obj.postMessage(htmlToM2(inputSpan));
@@ -324,6 +563,7 @@ const Shell = function (
       if (
         e.key == "ArrowDown" ? downArrowKeyHandling() : upArrowKeyHandling()
       ) {
+        hideCompletionMenu();
         e.preventDefault();
         setCaretAtEndMaybe(inputSpan);
         scrollDown(terminal);
@@ -375,6 +615,8 @@ const Shell = function (
     if (!inputSpan) return;
     if (document.activeElement == inputSpan && getCaret(inputSpan) == 0)
       scrollLeft(terminal);
+    if (document.activeElement == inputSpan) showCompletionMenu(false);
+    else hideCompletionMenu();
   };
 
   terminal.onkeyup = function (e: KeyboardEvent) {
@@ -612,11 +854,26 @@ const Shell = function (
     htmlSec = anc;
   };
 
-  obj.displayOutput = function (msg: string) {
+  obj.displayOutput = function (msg: string, isErrorOutput = false) {
     obj.openedHelp = false;
     if (procInputSpan !== null) {
       procInputSpan.remove();
       procInputSpan = null;
+    }
+    if (isErrorOutput && htmlSec.classList.contains("M2Input")) {
+      const activeHtmlSec = htmlSec;
+      const activeCell = activeHtmlSec.parentElement as HTMLElement;
+      const previousCell = activeCell?.previousElementSibling as HTMLElement;
+      if (previousCell) htmlSec = previousCell;
+      else if (activeCell?.parentElement) {
+        htmlSec = document.createElement("span");
+        htmlSec.className = "M2Text";
+        activeCell.parentElement.insertBefore(htmlSec, activeCell);
+      } else htmlSec = terminal;
+      displayText(msg);
+      htmlSec = activeHtmlSec;
+      scrollDownLeft(terminal);
+      return;
     }
     const txt = msg.replace(/\r/g, "").split(webAppRegex);
     for (let i = 0; i < txt.length; i += 2) {

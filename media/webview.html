@@ -8,6 +8,49 @@
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.13.11/dist/katex.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.13.11/dist/contrib/auto-render.min.js"></script>
     <link rel="stylesheet" href="${cssUri}">
+    <style>
+      .M2CompletionMenu {
+        background: var(--vscode-editorWidget-background, #f3f3f3);
+        border: 1px solid var(--vscode-editorWidget-border, #c8c8c8);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, .22);
+        color: var(--vscode-editorWidget-foreground, #222);
+        font-family: Iosevka, monospace;
+        font-size: 13px;
+        list-style: none;
+        margin: 0;
+        max-height: 240px;
+        min-width: 260px;
+        overflow: auto;
+        padding: 2px 0;
+        position: fixed;
+        z-index: 1000;
+      }
+
+      .M2CompletionItem {
+        align-items: center;
+        cursor: default;
+        display: flex;
+        gap: 1.5em;
+        justify-content: space-between;
+        line-height: 1.5;
+        padding: 1px 8px;
+        white-space: nowrap;
+      }
+
+      .M2CompletionItem.selected {
+        background: var(--vscode-list-activeSelectionBackground, #0e639c);
+        color: var(--vscode-list-activeSelectionForeground, #fff);
+      }
+
+      .M2CompletionKind {
+        color: var(--vscode-descriptionForeground, #666);
+        font-size: 11px;
+      }
+
+      .M2CompletionItem.selected .M2CompletionKind {
+        color: inherit;
+      }
+    </style>
     <script type="module" src="${scriptUri}"></script>
     <script type="module" src="${VGUri}"></script>
   </head>

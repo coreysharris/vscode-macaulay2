@@ -3,6 +3,7 @@ import * as fs from "fs";
 import * as path from "path";
 
 import { spawn, ChildProcess } from "child_process";
+import { getWebviewCompletionItems } from "./completionProviders";
 import { resolveM2Executable } from "./executablePath";
 
 let g_context: vscode.ExtensionContext | undefined;
@@ -115,7 +116,11 @@ function startM2() {
     // forward stderr as output too
     console.log("M2 stderr:", data.toString());
     if (g_panel)
-      g_panel.webview.postMessage({ type: "output", data: data.toString() });
+      g_panel.webview.postMessage({
+        type: "output",
+        data: data.toString(),
+        stream: "stderr",
+      });
   });
 
   proc.on("error", (err) => {
@@ -242,6 +247,14 @@ function getWebviewContent(webview: vscode.Webview) {
     vscode.Uri.joinPath(extensionUri, "media", "minimal.css"),
   );
   html = html.replace("${cssUri}", cssUri.toString());
+  const completionItemsJson = JSON.stringify(getWebviewCompletionItems()).replace(
+    /</g,
+    "\\u003c",
+  );
+  html = html.replace(
+    "</head>",
+    `<script>window.macaulay2CompletionItems = ${completionItemsJson};</script>\n  </head>`,
+  );
   return html;
 }
 
