@@ -8,10 +8,12 @@ import { resolveM2Executable } from "./executablePath";
 
 let g_context: vscode.ExtensionContext | undefined;
 let g_panel: vscode.WebviewPanel | undefined;
+let g_terminal: vscode.Terminal | undefined;
 let proc: ChildProcess | undefined;
 let procWorkingDir: string | undefined;
 
 type WebviewTopLevelMode = "webview" | "standard";
+type ReplTarget = "webview" | "terminal";
 
 type HelpPanelState = {
   panel: vscode.WebviewPanel;
@@ -69,7 +71,14 @@ function getM2StartupExpression(): string {
   );
 }
 
-function startM2() {
+function getReplTarget(): ReplTarget {
+  const configuredTarget = vscode.workspace
+    .getConfiguration("macaulay2")
+    .get<string>("replTarget", "webview");
+  return configuredTarget === "terminal" ? "terminal" : "webview";
+}
+
+function getM2ExecutableResolution() {
   const configuredPath = vscode.workspace
     .getConfiguration("macaulay2")
     .get<string>("executablePath");
@@ -89,12 +98,16 @@ function startM2() {
           );
         }
       });
-    return;
+    return undefined;
   }
-  const exepath = resolution.executablePath;
-  console.log(`Using M2 executable from ${resolution.source}: ${exepath}`);
 
-  // Determine the working directory for Macaulay2
+  console.log(
+    `Using M2 executable from ${resolution.source}: ${resolution.executablePath}`,
+  );
+  return resolution;
+}
+
+function getM2WorkingDir(): string {
   let workingDir: string;
   const activeEditor = vscode.window.activeTextEditor;
 
@@ -114,6 +127,30 @@ function startM2() {
     workingDir = process.cwd();
     console.log(`Starting M2 in process working directory: ${workingDir}`);
   }
+
+  return workingDir;
+}
+
+function normalizeM2Input(text: string): string {
+  // TODO: remove this ... (make sure stuff copied from editor has \n) and fix ctrl-C
+  // Filter out empty lines and send to terminal
+  var lines = text.split(/\r?\n/);
+  lines = lines.filter((line) => line !== "");
+  text = lines.join("\n");
+
+  if (!text.endsWith("\n")) {
+    text = text + "\n";
+  }
+  return text;
+}
+
+function startM2() {
+  const resolution = getM2ExecutableResolution();
+  if (!resolution) {
+    return;
+  }
+  const exepath = resolution.executablePath;
+  const workingDir = getM2WorkingDir();
 
   // Spawn M2 directly (no shell) so signals like SIGINT reach the M2 process.
   // Previously we used a shell with `2>&1` which merged stderr/stdout but prevented
@@ -169,7 +206,12 @@ function startM2() {
    */
 }
 
-function startREPLCommand(context: vscode.ExtensionContext) {
+function startREPLCommand() {
+  if (getReplTarget() === "terminal") {
+    startM2Terminal(false);
+    return;
+  }
+
   startREPL(false);
 }
 
@@ -209,16 +251,7 @@ async function startREPL(preserveFocus: boolean) {
 async function executeCode(text: string) {
   await startREPL(true);
 
-  // TODO: remove this ... (make sure stuff copied from editor has \n) and fix ctrl-C
-  // Filter out empty lines and send to terminal
-  var lines = text.split(/\r?\n/);
-  lines = lines.filter((line) => line !== "");
-  text = lines.join("\n");
-
-  if (!text.endsWith("\n")) {
-    text = text + "\n";
-  }
-  // ... until here
+  text = normalizeM2Input(text);
   if (proc && proc.stdin) {
     proc.stdin.write(text);
   } else {
@@ -226,19 +259,85 @@ async function executeCode(text: string) {
   }
 }
 
-function executeSelection() {
-  var editor = vscode.window.activeTextEditor;
-  if (!editor) {
+function startTerminalCommand() {
+  startM2Terminal(false);
+}
+
+function startM2Terminal(preserveFocus: boolean): vscode.Terminal | undefined {
+  if (g_terminal && !g_terminal.exitStatus) {
+    g_terminal.show(preserveFocus);
+    return g_terminal;
+  }
+  g_terminal = undefined;
+
+  const resolution = getM2ExecutableResolution();
+  if (!resolution) {
+    return undefined;
+  }
+
+  const workingDir = getM2WorkingDir();
+  g_terminal = vscode.window.createTerminal({
+    name: "Macaulay2",
+    shellPath: resolution.executablePath,
+    cwd: workingDir,
+  });
+  g_terminal.show(preserveFocus);
+  return g_terminal;
+}
+
+async function executeCodeInTerminal(text: string) {
+  const terminal = startM2Terminal(true);
+  if (!terminal) {
     return;
   }
 
+  text = normalizeM2Input(text);
+  terminal.sendText(text, false);
+}
+
+async function executeCodeForConfiguredTarget(text: string) {
+  if (getReplTarget() === "terminal") {
+    await executeCodeInTerminal(text);
+    return;
+  }
+
+  await executeCode(text);
+}
+
+function getSelectedM2Code(): string | undefined {
+  var editor = vscode.window.activeTextEditor;
+  if (!editor) {
+    return undefined;
+  }
+
   var selection = editor.selection;
-  var text = selection.isEmpty
+  return selection.isEmpty
     ? editor.document.lineAt(selection.start.line).text
     : editor.document.getText(selection);
+}
 
-  executeCode(text);
+function executeSelection() {
+  const text = getSelectedM2Code();
+  if (text === undefined) {
+    return;
+  }
+
+  executeCodeForConfiguredTarget(text);
   // Move the cursor to the next line
+  vscode.commands.executeCommand("cursorMove", {
+    to: "down",
+    by: "line",
+    value: 1,
+  });
+}
+
+function executeSelectionInTerminal() {
+  const text = getSelectedM2Code();
+  if (text === undefined) {
+    return;
+  }
+
+  executeCodeInTerminal(text);
   vscode.commands.executeCommand("cursorMove", {
     to: "down",
     by: "line",
@@ -608,6 +707,17 @@ function parseVSCodeFragment(pathWithFragment: string): {
 
 function interruptM2() {
   console.log("interrupt");
+  if (
+    g_terminal &&
+    !g_terminal.exitStatus &&
+    (getReplTarget() === "terminal" ||
+      vscode.window.activeTerminal === g_terminal ||
+      !proc)
+  ) {
+    g_terminal.sendText("\x03", false);
+    return;
+  }
+
   if (!proc) return;
 
   try {
@@ -699,10 +809,26 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand("macaulay2.startREPL", startREPLCommand),
   );
   context.subscriptions.push(
+    vscode.commands.registerCommand("macaulay2.startTerminal", startTerminalCommand),
+  );
+  context.subscriptions.push(
     vscode.commands.registerCommand("macaulay2.sendToREPL", executeSelection),
   );
   context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "macaulay2.sendToTerminal",
+      executeSelectionInTerminal,
+    ),
+  );
+  context.subscriptions.push(
     vscode.commands.registerCommand("macaulay2.interruptREPL", interruptM2),
+  );
+  context.subscriptions.push(
+    vscode.window.onDidCloseTerminal((terminal) => {
+      if (terminal === g_terminal) {
+        g_terminal = undefined;
+      }
+    }),
   );
 }
 
@@ -710,5 +836,9 @@ export function deactivate() {
   if (proc) {
     proc.kill();
     proc = undefined;
+  }
+  if (g_terminal) {
+    g_terminal.dispose();
+    g_terminal = undefined;
   }
 }

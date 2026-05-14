@@ -25,8 +25,16 @@
 				"title": "Start M2 REPL"
 			},
 			{
+				"command": "macaulay2.startTerminal",
+				"title": "Start M2 Terminal"
+			},
+			{
 				"command": "macaulay2.sendToREPL",
 				"title": "Send code to Macaulay2 REPL"
+			},
+			{
+				"command": "macaulay2.sendToTerminal",
+				"title": "Send code to Macaulay2 Terminal"
 			},
 			{
 				"command": "macaulay2.interruptREPL",
@@ -84,6 +92,20 @@
 						"Run the Macaulay2 webview REPL with topLevelMode = Standard."
 					],
 					"description": "Controls Macaulay2's topLevelMode inside the VS Code webview REPL.",
+					"scope": "window"
+				},
+				"macaulay2.replTarget": {
+					"type": "string",
+					"default": "webview",
+					"enum": [
+						"webview",
+						"terminal"
+					],
+					"enumDescriptions": [
+						"Send code to the extension's existing HTML webview REPL.",
+						"Send code to a real VS Code terminal running Macaulay2."
+					],
+					"description": "Controls where 'Send code to Macaulay2 REPL' sends code.",
 					"scope": "window"
 				},
 				"macaulay2.interruptOnControlC": {

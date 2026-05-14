@@ -11,6 +11,8 @@ This extension provides support for the Macaulay2 language in Visual Studio Code
 
 - An integrated webview REPL. The default `macaulay2.webviewTopLevelMode` is `webview`, which starts Macaulay2 with `topLevelMode = WebApp`; set it to `standard` to use `topLevelMode = Standard` in the same VS Code webview.
 
+- Optional terminal-backed evaluation. Run `Macaulay2: Start M2 Terminal` or `Macaulay2: Send code to Macaulay2 Terminal` to use a real VS Code terminal, or set `macaulay2.replTarget` to `terminal` so the normal start/send commands and keybindings target the terminal.
+
 - Automatic Macaulay2 executable detection on macOS and Windows, with an optional manual override via `macaulay2.executablePath`
 
 ## Requirements
