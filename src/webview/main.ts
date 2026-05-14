@@ -18,7 +18,7 @@ window.addEventListener("message", (event) => {
           outputElement.parentElement.scrollHeight;
       }
       // put focus back on editor:
-      vscode.postMessage({ type: "focus" });
+      if (!myshell.openedHelp) vscode.postMessage({ type: "focus" });
       break;
   }
 });
