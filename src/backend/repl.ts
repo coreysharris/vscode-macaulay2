@@ -11,6 +11,8 @@ let g_panel: vscode.WebviewPanel | undefined;
 let proc: ChildProcess | undefined;
 let procWorkingDir: string | undefined;
 
+type WebviewTopLevelMode = "webview" | "standard";
+
 type HelpPanelState = {
   panel: vscode.WebviewPanel;
   currentFilePath: string;
@@ -48,6 +50,23 @@ function getM2StartupPatch(): string {
     "help#0 DocumentTag := tag -> try vscodeM2ExtensionOriginalDocHelp tag else vscodeM2ExtensionTopHelp tag;",
     ') else printerr "warning: VS Code help fallback could not be installed"',
   ].join(" ");
+}
+
+function getWebviewTopLevelMode(): WebviewTopLevelMode {
+  const configuredMode = vscode.workspace
+    .getConfiguration("macaulay2")
+    .get<string>("webviewTopLevelMode", "webview");
+  return configuredMode === "standard" ? "standard" : "webview";
+}
+
+function getM2TopLevelMode(): "WebApp" | "Standard" {
+  return getWebviewTopLevelMode() === "standard" ? "Standard" : "WebApp";
+}
+
+function getM2StartupExpression(): string {
+  return [`topLevelMode = ${getM2TopLevelMode()};`, getM2StartupPatch()].join(
+    " ",
+  );
 }
 
 function startM2() {
@@ -100,7 +119,7 @@ function startM2() {
   // Previously we used a shell with `2>&1` which merged stderr/stdout but prevented
   // SIGINT from interrupting the actual M2 process. Listening to both stdout and
   // stderr separately preserves output while allowing interrupts to work.
-  proc = spawn(exepath, ["--webapp", "-e", getM2StartupPatch()], {
+  proc = spawn(exepath, ["--webapp", "-e", getM2StartupExpression()], {
     cwd: workingDir,
   });
   console.log("M2 process started (pid=", proc.pid, ")");

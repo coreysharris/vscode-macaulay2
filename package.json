@@ -72,6 +72,20 @@
 					"description": "Optional override for the Macaulay2 executable. Leave empty to auto-detect it.",
 					"scope": "application"
 				},
+				"macaulay2.webviewTopLevelMode": {
+					"type": "string",
+					"default": "webview",
+					"enum": [
+						"webview",
+						"standard"
+					],
+					"enumDescriptions": [
+						"Run the Macaulay2 webview REPL with topLevelMode = WebApp.",
+						"Run the Macaulay2 webview REPL with topLevelMode = Standard."
+					],
+					"description": "Controls Macaulay2's topLevelMode inside the VS Code webview REPL.",
+					"scope": "window"
+				},
 				"macaulay2.interruptOnControlC": {
 					"type": "boolean",
 					"default": true,
