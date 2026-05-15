@@ -192,8 +192,8 @@
 	"scripts": {
 		"vscode:prepublish": "npm run compile",
 		"compile": "tsc -p tsconfig.backend.json && tsc -p tsconfig.webview.json",
-		"watch-backend": "tsc -w -p tsconfig.backend.json",
-		"watch-webview": "tsc -w -p tsconfig.webview.json",
+		"watch-backend": "tsc -w -p tsconfig.backend.json --pretty false --preserveWatchOutput",
+		"watch-webview": "tsc -w -p tsconfig.webview.json --pretty false --preserveWatchOutput",
 		"watch": "npm-run-all --parallel watch-backend watch-webview",
 		"clean": "rimraf node_modules out dist package-lock.json",
 		"test": "rimraf out/test && npm run compile && vscode-test",
