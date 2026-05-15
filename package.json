@@ -15,7 +15,8 @@
 		"Programming Languages"
 	],
 	"activationEvents": [
-		"onLanguage:macaulay2"
+		"onLanguage:macaulay2",
+		"onStartupFinished"
 	],
 	"main": "./out/extension.js",
 	"contributes": {
@@ -39,6 +40,10 @@
 			{
 				"command": "macaulay2.interruptREPL",
 				"title": "Interrupt M2 Computation"
+			},
+			{
+				"command": "macaulay2.selectExecutablePath",
+				"title": "Select M2 Executable"
 			}
 		],
 		"grammars": [
@@ -78,6 +83,21 @@
 					"type": "string",
 					"default": "",
 					"description": "Optional override for the Macaulay2 executable. Leave empty to auto-detect it.",
+					"scope": "application"
+				},
+				"macaulay2.executablePathAlternatives": {
+					"type": "array",
+					"default": [],
+					"items": {
+						"type": "string"
+					},
+					"description": "Additional Macaulay2 executables to show in the executable switcher. The active executablePath and auto-detect option are always included.",
+					"scope": "application"
+				},
+				"macaulay2.showExecutableSwitcher": {
+					"type": "boolean",
+					"default": false,
+					"description": "Show a status bar button for quickly switching the Macaulay2 executable.",
 					"scope": "application"
 				},
 				"macaulay2.webviewTopLevelMode": {
@@ -176,9 +196,9 @@
 		"watch-webview": "tsc -w -p tsconfig.webview.json",
 		"watch": "npm-run-all --parallel watch-backend watch-webview",
 		"clean": "rimraf node_modules out dist package-lock.json",
-		"test": "vscode-test",
-	        "update": "M2 --script generate-grammar.m2",
-	        "format": "prettier --write src/*/*.ts"
+		"test": "rimraf out/test && npm run compile && vscode-test",
+		"update": "M2 --script generate-grammar.m2",
+		"format": "prettier --write src/*/*.ts"
 	},
 	"devDependencies": {
 		"@types/mocha": "^2.2.48",
@@ -189,8 +209,8 @@
 		"npm-run-all": "^4.1.5",
 		"rimraf": "^6.0.1",
 		"tslint": "^5.12.1",
-	        "typescript": "^5.4.0",
-	    	"prettier": "^3.5.3"
+		"typescript": "^5.4.0",
+		"prettier": "^3.5.3"
 	},
 	"dependencies": {
 		"highlight.js": "^11.11.1",

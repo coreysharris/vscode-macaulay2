@@ -19,6 +19,9 @@ Install Macaulay2 first, then open a `.m2` file in VS Code. The extension will t
 
 Use `F12` or run **Macaulay2: Start M2 REPL** from the Command Palette to start an interactive session. Use `Shift+Enter` to send the current selection, or the current line when nothing is selected, to Macaulay2.
 
+- Optional executable switcher. Set `macaulay2.showExecutableSwitcher` to `true` and add paths to `macaulay2.executablePathAlternatives` to show a status bar button for switching between M2 binaries.
+
+## Requirements
 If the extension cannot find Macaulay2, set `macaulay2.executablePath` to the full path of your `M2` executable.
 
 ## Commands
