@@ -24,8 +24,16 @@ const helpPanels = new Set<HelpPanelState>();
 
 // In WebApp mode, some help pages fail while processing example output.
 // Keep native help where it works, and fall back to the top documentation node.
+// Also expand ordinary method functions through their installed methods when
+// `code f` has no direct source body to show.
 function getM2StartupPatch(): string {
   return [
+    "try (",
+    "vscodeM2ExtensionOriginalCodeFunction = lookup(code, Function);",
+    "code MethodFunction := f -> (",
+    "m := methods f;",
+    "if #m > 0 then code m else vscodeM2ExtensionOriginalCodeFunction f);",
+    ') else printerr "warning: VS Code code fallback could not be installed";',
     "try (",
     "local tag, rawdoc, rawtag, pkg, fkey, rawTable, had, old, result, k, fetchAny, oldDocumentTag;",
     "vscodeM2ExtensionOriginalDocHelp = lookup(help#0, DocumentTag);",
