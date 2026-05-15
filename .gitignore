@@ -3,6 +3,8 @@ media
 node_modules
 .vscode-test/
 *.vsix
+!releases/
+!releases/*.vsix
 *~
 *.map
 package-lock.json
