@@ -23,7 +23,3 @@ You need a working installation of Macaulay2. The extension now tries to find th
 - On Windows it checks the current environment, Cygwin's own shell, and common Cygwin install locations.
 
 If detection fails, you can still set `macaulay2.executablePath` manually.
-
-## Codespaces
-
-This repository now includes a devcontainer for GitHub Codespaces. Opening the repo in a codespace provisions Macaulay2 inside the container and runs `npm install`, so testing the extension with `F5` should find `M2` without any manual path setting.
