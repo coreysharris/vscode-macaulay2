@@ -694,6 +694,125 @@ const Shell = function (
 
   const subList = [];
 
+  // If rich TeX/HTML rendering fails, show escaped fallback text rather than
+  // leaking internal \htmlId placeholders into the output.
+  const unresolvedHtmlIdPattern = /\\htmlId\{sub\d+\}/;
+
+  const replaceAll = function (
+    text: string,
+    needle: string,
+    replacement: string,
+  ) {
+    return text.split(needle).join(replacement);
+  };
+
+  const replaceDelimitedTexCommand = function (
+    text: string,
+    command: string,
+    replacement: (argument: string) => string,
+  ) {
+    let result = "";
+    let index = 0;
+    const prefix = "\\" + command + "{";
+    while (index < text.length) {
+      const start = text.indexOf(prefix, index);
+      if (start < 0) {
+        result += text.substring(index);
+        break;
+      }
+      result += text.substring(index, start);
+      let depth = 1;
+      let end = start + prefix.length;
+      while (end < text.length && depth > 0) {
+        if (text[end] == "{") depth++;
+        else if (text[end] == "}") depth--;
+        end++;
+      }
+      if (depth > 0) {
+        result += text.substring(start);
+        break;
+      }
+      result += replacement(text.substring(start + prefix.length, end - 1));
+      index = end;
+    }
+    return result;
+  };
+
+  const plainTextFromTex = function (text: string) {
+    let plain = text.trim();
+    if (plain[0] == "$" && plain[plain.length - 1] == "$")
+      plain = plain.substring(1, plain.length - 1);
+
+    [
+      "texttt",
+      "textrm",
+      "textsf",
+      "mathrm",
+      "mathit",
+      "mathbf",
+      "mathbb",
+      "mathfrak",
+      "mathcal",
+    ].forEach((command) => {
+      plain = replaceDelimitedTexCommand(
+        plain,
+        command,
+        (argument) => argument,
+      );
+    });
+
+    plain = plain
+      .replace(/\\left/g, "")
+      .replace(/\\right/g, "")
+      .replace(/\\begin\{(?:array|aligned|tabular)\}(?:\{[^}]*\})?/g, "")
+      .replace(/\\end\{(?:array|aligned|tabular)\}/g, "")
+      .replace(/\\(?:,|:|;|!)/g, "")
+      .replace(/\\q?quad/g, " ")
+      .replace(/\\\\/g, "\n")
+      .replace(/&/g, "")
+      .replace(/\\([{}[\]().,|/])/g, "$1")
+      .replace(/\\ /g, " ")
+      .replace(/\s+\n/g, "\n")
+      .replace(/\n\s+/g, "\n");
+    return plain;
+  };
+
+  const fallbackTextForRichOutput = function (
+    rawHtml: string,
+    idList?: string,
+  ) {
+    let fallback = rawHtml || "";
+    if (idList) {
+      idList.split(" ").forEach(function (id) {
+        const sub = subList[+id];
+        if (sub)
+          fallback = replaceAll(fallback, sub[0], sub[1].textContent || "");
+      });
+    }
+    const scratch = document.createElement("span");
+    scratch.innerHTML = fallback;
+    return plainTextFromTex(scratch.textContent || fallback);
+  };
+
+  const shouldUsePlainTextFallback = function (
+    rawHtml: string,
+    idList?: string,
+  ) {
+    const trimmed = rawHtml.trim();
+    return !!idList && trimmed[0] == "$" && trimmed[trimmed.length - 1] == "$";
+  };
+
+  const fallbackRichOutput = function (
+    target: HTMLElement,
+    rawHtml: string,
+    idList: string | undefined,
+    reason: string,
+  ) {
+    target.textContent = fallbackTextForRichOutput(rawHtml, idList);
+    target.classList.add("M2RenderFallback");
+    console.log("Macaulay2 rich output fallback: " + reason);
+  };
+
   const recurseReplace = function (container, str, el) {
     for (let i = 0; i < container.childNodes.length; i++) {
       const sub = container.childNodes[i];
@@ -820,84 +939,110 @@ const Shell = function (
       if (anc.classList.contains("M2Input")) {
         anc.parentElement.insertBefore(htmlSec, anc);
       }
-      htmlSec.insertAdjacentHTML("beforeend", htmlSec.dataset.code);
-      // KaTeX rendering // TODO reinstate bundled version
-      // autoRender(htmlSec);
-      // instead we use the non-bundled katex
-      // @ts-ignore
-      renderMathInElement(htmlSec, {
-        strict: false,
-        trust: true,
-        // Dense Macaulay2 output can contain thousands of thin-space macros.
-        maxExpand: 100000,
-        delimiters: [{ left: "$", right: "$", display: false }],
-      });
-      // syntax highlighting code
-      /*
-      Array.from(
-        htmlSec.querySelectorAll(
-          "code.language-macaulay2"
-        ) as NodeListOf<HTMLElement>
-      ).forEach(
-        (x) =>
-          (x.innerHTML = Prism.highlight(
-            x.innerText,
-            Prism.languages.macaulay2
-          ))
-      );
-       */
-      // auto opening links
-      Array.from(
-        htmlSec.querySelectorAll("a.auto") as NodeListOf<HTMLAnchorElement>,
-      ).forEach((x) => {
-        let url = x.getAttribute("href") || x.href;
-        console.log("Opening URL " + url);
-        openHelp(url);
-      });
-      // error highlighting
-      Array.from(
-        htmlSec.querySelectorAll(
-          ".M2ErrorLocation a",
-        ) as NodeListOf<HTMLAnchorElement>,
-      ).forEach((x) => {
-        const [name, rowcols] = parseLocation(x.getAttribute("href"));
-        if (rowcols) {
-          // highlight error
-          if (name == "stdio") {
-            const nodeOffset = obj.locateStdio(
-              sessionCell(htmlSec),
-              rowcols[0],
-              rowcols[1],
-            );
-            if (nodeOffset) {
-              addMarkerPos(nodeOffset[0], nodeOffset[1]).classList.add(
-                "error-marker",
-              );
-            }
-          }
-          // TODO other cases
+      const rawHtml = htmlSec.dataset.code || "";
+      const idList = htmlSec.dataset.idList;
+      let renderFailure: string | undefined;
+      if (shouldUsePlainTextFallback(rawHtml, idList)) {
+        renderFailure = "generic TeX output contains embedded HTML";
+      } else {
+        try {
+          htmlSec.insertAdjacentHTML("beforeend", rawHtml);
+          // KaTeX rendering // TODO reinstate bundled version
+          // autoRender(htmlSec);
+          // instead we use the non-bundled katex
+          // @ts-ignore
+          renderMathInElement(htmlSec, {
+            strict: false,
+            trust: true,
+            throwOnError: true,
+            // Dense Macaulay2 output can contain thousands of thin-space macros.
+            maxExpand: 100000,
+            delimiters: [{ left: "$", right: "$", display: false }],
+          });
+        } catch (e) {
+          renderFailure = "KaTeX could not render this output";
+          console.log(e);
         }
-      });
-      // putting pieces back together
-      if (htmlSec.dataset.idList) {
-        htmlSec.dataset.idList.split(" ").forEach(function (id) {
-          const el = document.getElementById("sub" + id);
-          if (el) {
-            if (el.style.color == "transparent") subList[+id][1].remove();
-            // e.g. inside \vphantom{}
-            else {
-              el.style.display = "contents"; // could put in css but don't want to overreach
-              el.style.fontSize = "0.826446280991736em"; // to compensate for katex's 1.21 factor
-              el.innerHTML = "";
-              el.appendChild(subList[+id][1]);
+      }
+      if (!renderFailure) {
+        // syntax highlighting code
+        /*
+        Array.from(
+          htmlSec.querySelectorAll(
+            "code.language-macaulay2"
+          ) as NodeListOf<HTMLElement>
+        ).forEach(
+          (x) =>
+            (x.innerHTML = Prism.highlight(
+              x.innerText,
+              Prism.languages.macaulay2
+            ))
+        );
+         */
+        // auto opening links
+        Array.from(
+          htmlSec.querySelectorAll("a.auto") as NodeListOf<HTMLAnchorElement>,
+        ).forEach((x) => {
+          let url = x.getAttribute("href") || x.href;
+          console.log("Opening URL " + url);
+          openHelp(url);
+        });
+        // error highlighting
+        Array.from(
+          htmlSec.querySelectorAll(
+            ".M2ErrorLocation a",
+          ) as NodeListOf<HTMLAnchorElement>,
+        ).forEach((x) => {
+          const [name, rowcols] = parseLocation(x.getAttribute("href"));
+          if (rowcols) {
+            // highlight error
+            if (name == "stdio") {
+              const nodeOffset = obj.locateStdio(
+                sessionCell(htmlSec),
+                rowcols[0],
+                rowcols[1],
+              );
+              if (nodeOffset) {
+                addMarkerPos(nodeOffset[0], nodeOffset[1]).classList.add(
+                  "error-marker",
+                );
+              }
             }
-          } else {
-            // more complicated
-            if (!recurseReplace(htmlSec, subList[+id][0], subList[+id][1]))
-              console.log("Error restoring html element");
+            // TODO other cases
           }
         });
+        // putting pieces back together
+        if (idList) {
+          idList.split(" ").forEach(function (id) {
+            if (renderFailure) return;
+            const el = document.getElementById("sub" + id);
+            if (el) {
+              if (el.style.color == "transparent") subList[+id][1].remove();
+              // e.g. inside \vphantom{}
+              else {
+                el.style.display = "contents"; // could put in css but don't want to overreach
+                el.style.fontSize = "0.826446280991736em"; // to compensate for katex's 1.21 factor
+                el.innerHTML = "";
+                el.appendChild(subList[+id][1]);
+              }
+            } else {
+              // more complicated
+              if (!recurseReplace(htmlSec, subList[+id][0], subList[+id][1]))
+                renderFailure =
+                  "internal rich-output placeholder was not restored";
+            }
+          });
+          htmlSec.removeAttribute("data-id-list");
+        }
+        if (
+          !renderFailure &&
+          unresolvedHtmlIdPattern.test(htmlSec.textContent || "")
+        )
+          renderFailure = "internal rich-output placeholder remained visible";
+      }
+      if (renderFailure) {
         htmlSec.removeAttribute("data-id-list");
+        fallbackRichOutput(htmlSec, rawHtml, idList, renderFailure);
       }
     } else if (htmlSec.classList.contains("M2Url")) {
       const url = htmlSec.dataset.code;
