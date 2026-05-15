@@ -164,7 +164,7 @@ function startM2() {
   // Previously we used a shell with `2>&1` which merged stderr/stdout but prevented
   // SIGINT from interrupting the actual M2 process. Listening to both stdout and
   // stderr separately preserves output while allowing interrupts to work.
-  const child = spawn(exepath, ["--webapp", "-e", getM2StartupExpression()], {
+  const child = spawn(exepath, ["-e", getM2StartupExpression()], {
     cwd: workingDir,
   });
   proc = child;

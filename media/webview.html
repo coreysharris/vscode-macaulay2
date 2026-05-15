@@ -9,6 +9,36 @@
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.13.11/dist/contrib/auto-render.min.js"></script>
     <link rel="stylesheet" href="${cssUri}">
     <style>
+      html,
+      body {
+        box-sizing: border-box;
+        height: 100%;
+        margin: 0;
+        max-width: 100%;
+        overflow: hidden;
+        width: 100%;
+      }
+
+      #terminal {
+        height: 100vh;
+        max-height: 100vh;
+        max-width: 100vw;
+        overflow-x: hidden;
+        overflow-y: auto;
+        width: 100vw;
+      }
+
+      .M2Cell {
+        box-sizing: border-box;
+        max-width: 100%;
+        min-width: 0;
+        overflow-x: auto;
+      }
+
+      .M2Html {
+        max-width: 100%;
+      }
+
       .M2CompletionMenu {
         background: var(--vscode-editorWidget-background, #f3f3f3);
         border: 1px solid var(--vscode-editorWidget-border, #c8c8c8);
@@ -54,9 +84,11 @@
     <script type="module" src="${scriptUri}"></script>
     <script type="module" src="${VGUri}"></script>
   </head>
-  <body id="terminal" class="M2Text" style="max-height: 90vh; margin-top:0px">
-    <span style="z-index:1; position:fixed; right:0px; top:0px;">
-      <button id="resetBtn">RESET</button><button id="interruptBtn">INTERRUPT</button>
-    </span>
+  <body>
+    <div id="terminal" class="M2Text">
+      <span style="z-index:1; position:fixed; right:0px; top:0px;">
+        <button id="resetBtn">RESET</button><button id="interruptBtn">INTERRUPT</button>
+      </span>
+    </div>
   </body>
 </html>

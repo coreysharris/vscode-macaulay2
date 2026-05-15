@@ -16,12 +16,8 @@ window.addEventListener("message", (event) => {
   switch (message.type) {
     case "output":
       myshell.displayOutput(message.data, message.stream == "stderr");
-      // next line is a hack: scroll is already performed by shellEmulator,
-      // but it doesn't work on <body>, need to do it on its parent element instead
-      if (outputElement && outputElement.parentElement) {
-        // check  nonempty
-        outputElement.parentElement.scrollTop =
-          outputElement.parentElement.scrollHeight;
+      if (outputElement) {
+        outputElement.scrollTop = outputElement.scrollHeight;
       }
       // put focus back on editor:
       if (!myshell.openedHelp) vscode.postMessage({ type: "focus" });
