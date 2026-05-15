@@ -9,9 +9,123 @@
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.13.11/dist/contrib/auto-render.min.js"></script>
     <link rel="stylesheet" href="${cssUri}">
     <style>
+      :root {
+        --m2-background: #ffffff;
+        --m2-foreground: #000000;
+        --m2-muted-foreground: #607080;
+        --m2-link-foreground: #c86400;
+        --m2-code-background: #ffffe0;
+        --m2-code-foreground: #000000;
+        --m2-code-shadow: rgba(0, 0, 0, .75);
+        --m2-input-hover-background: #e0ffc0;
+        --m2-cell-hover-background: grey;
+        --m2-cell-selected-background: orange;
+        --m2-menu-background: #f0f0f0;
+        --m2-menu-border: #b1b1b1;
+        --m2-menu-shadow: rgba(0, 0, 0, .35);
+        --m2-menu-selection-background: #ff6e40;
+        --m2-menu-selection-foreground: #000000;
+        --m2-error-foreground: red;
+        --m2-valid-marker-foreground: #50a000;
+        --m2-caret-marker-foreground: #000000;
+        --m2-token-comment: #607080;
+        --m2-token-constant: #004060;
+        --m2-token-string: #8b2252;
+        --m2-token-keyword: #a020f0;
+        --m2-token-function: #0000ff;
+        --m2-token-class: #1c701c;
+        --m2-svg-stroke: #000000;
+      }
+
+      :root[data-macaulay2-color-theme="light"] {
+        --m2-background: #ffffff;
+        --m2-foreground: #1f2328;
+        --m2-muted-foreground: #57606a;
+        --m2-link-foreground: #0969da;
+        --m2-code-background: #f6f8fa;
+        --m2-code-foreground: #1f2328;
+        --m2-code-shadow: rgba(31, 35, 40, .18);
+        --m2-input-hover-background: #ddf4ff;
+        --m2-cell-hover-background: #d0d7de;
+        --m2-cell-selected-background: #0969da;
+        --m2-menu-background: #ffffff;
+        --m2-menu-border: #d0d7de;
+        --m2-menu-shadow: rgba(31, 35, 40, .18);
+        --m2-menu-selection-background: #0969da;
+        --m2-menu-selection-foreground: #ffffff;
+        --m2-error-foreground: #cf222e;
+        --m2-valid-marker-foreground: #1a7f37;
+        --m2-caret-marker-foreground: #1f2328;
+        --m2-token-comment: #6e7781;
+        --m2-token-constant: #0550ae;
+        --m2-token-string: #0a3069;
+        --m2-token-keyword: #8250df;
+        --m2-token-function: #953800;
+        --m2-token-class: #116329;
+        --m2-svg-stroke: #1f2328;
+      }
+
+      :root[data-macaulay2-color-theme="dark"] {
+        --m2-background: #1f2328;
+        --m2-foreground: #e6edf3;
+        --m2-muted-foreground: #8b949e;
+        --m2-link-foreground: #58a6ff;
+        --m2-code-background: #30363d;
+        --m2-code-foreground: #e6edf3;
+        --m2-code-shadow: rgba(0, 0, 0, .5);
+        --m2-input-hover-background: #26384f;
+        --m2-cell-hover-background: #484f58;
+        --m2-cell-selected-background: #58a6ff;
+        --m2-menu-background: #161b22;
+        --m2-menu-border: #30363d;
+        --m2-menu-shadow: rgba(0, 0, 0, .55);
+        --m2-menu-selection-background: #1f6feb;
+        --m2-menu-selection-foreground: #ffffff;
+        --m2-error-foreground: #ff7b72;
+        --m2-valid-marker-foreground: #7ee787;
+        --m2-caret-marker-foreground: #e6edf3;
+        --m2-token-comment: #8b949e;
+        --m2-token-constant: #79c0ff;
+        --m2-token-string: #a5d6ff;
+        --m2-token-keyword: #d2a8ff;
+        --m2-token-function: #ffa657;
+        --m2-token-class: #7ee787;
+        --m2-svg-stroke: #e6edf3;
+      }
+
+      :root[data-macaulay2-color-theme="vscode"] {
+        --m2-background: var(--vscode-editor-background, #1e1e1e);
+        --m2-foreground: var(--vscode-editor-foreground, #d4d4d4);
+        --m2-muted-foreground: var(--vscode-descriptionForeground, #8b949e);
+        --m2-link-foreground: var(--vscode-textLink-foreground, #3794ff);
+        --m2-code-background: var(--vscode-textCodeBlock-background, rgba(127, 127, 127, .17));
+        --m2-code-foreground: var(--vscode-editor-foreground, #d4d4d4);
+        --m2-code-shadow: rgba(0, 0, 0, .35);
+        --m2-input-hover-background: var(--vscode-list-hoverBackground, rgba(127, 127, 127, .14));
+        --m2-cell-hover-background: var(--vscode-sideBarSectionHeader-border, #454545);
+        --m2-cell-selected-background: var(--vscode-focusBorder, #007fd4);
+        --m2-menu-background: var(--vscode-menu-background, var(--vscode-editorWidget-background, #252526));
+        --m2-menu-border: var(--vscode-menu-border, var(--vscode-editorWidget-border, #454545));
+        --m2-menu-shadow: rgba(0, 0, 0, .45);
+        --m2-menu-selection-background: var(--vscode-menu-selectionBackground, var(--vscode-list-activeSelectionBackground, #04395e));
+        --m2-menu-selection-foreground: var(--vscode-menu-selectionForeground, var(--vscode-list-activeSelectionForeground, #ffffff));
+        --m2-error-foreground: var(--vscode-errorForeground, #f48771);
+        --m2-valid-marker-foreground: var(--vscode-testing-iconPassed, #73c991);
+        --m2-caret-marker-foreground: var(--vscode-editor-foreground, #d4d4d4);
+        --m2-token-comment: var(--vscode-editorCodeLens-foreground, #999999);
+        --m2-token-constant: var(--vscode-symbolIcon-constantForeground, #4fc1ff);
+        --m2-token-string: var(--vscode-symbolIcon-stringForeground, #ce9178);
+        --m2-token-keyword: var(--vscode-symbolIcon-keywordForeground, #c586c0);
+        --m2-token-function: var(--vscode-symbolIcon-functionForeground, #dcdcaa);
+        --m2-token-class: var(--vscode-symbolIcon-classForeground, #4ec9b0);
+        --m2-svg-stroke: var(--vscode-editor-foreground, #d4d4d4);
+      }
+
       html,
       body {
+        background: var(--m2-background);
         box-sizing: border-box;
+        color: var(--m2-foreground);
         height: 100%;
         margin: 0;
         max-width: 100%;
@@ -20,6 +134,8 @@
       }
 
       #terminal {
+        background: var(--m2-background);
+        color: var(--m2-foreground);
         height: 100vh;
         max-height: 100vh;
         max-width: 100vw;
@@ -79,6 +195,90 @@
 
       .M2CompletionItem.selected .M2CompletionKind {
         color: inherit;
+      }
+
+      .M2Text,
+      .M2Html,
+      .katex {
+        color: var(--m2-foreground);
+      }
+
+      svg.M2Svg {
+        stroke: var(--m2-svg-stroke);
+      }
+
+      code {
+        background-color: var(--m2-code-background);
+        box-shadow: 1px 1px 2px 0 var(--m2-code-shadow);
+        color: var(--m2-code-foreground);
+      }
+
+      .M2PastInput:hover {
+        background-color: var(--m2-input-hover-background);
+        box-shadow: 1px 1px 2px 0 var(--m2-code-shadow);
+      }
+
+      .M2Cell:hover > .M2Left,
+      .M2Separator:hover {
+        background: var(--m2-cell-hover-background);
+      }
+
+      .M2Cell.M2CellSelected > .M2Left {
+        background: var(--m2-cell-selected-background) !important;
+      }
+
+      a {
+        color: var(--m2-link-foreground);
+      }
+
+      .menu .selected {
+        background-color: var(--m2-menu-selection-background);
+        color: var(--m2-menu-selection-foreground);
+      }
+
+      #contextmenu {
+        background: var(--m2-menu-background);
+        border-color: var(--m2-menu-border);
+        box-shadow: 4px 4px 3px -2px var(--m2-menu-shadow);
+        color: var(--m2-foreground);
+      }
+
+      .KatexError,
+      .error-marker:after {
+        color: var(--m2-error-foreground);
+      }
+
+      .valid-marker:after {
+        color: var(--m2-valid-marker-foreground);
+      }
+
+      .caret-marker:after {
+        color: var(--m2-caret-marker-foreground);
+      }
+
+      .token.comment {
+        color: var(--m2-token-comment);
+      }
+
+      .token.constant {
+        color: var(--m2-token-constant);
+      }
+
+      .token.net,
+      .token.string {
+        color: var(--m2-token-string);
+      }
+
+      .token.keyword {
+        color: var(--m2-token-keyword);
+      }
+
+      .token.function {
+        color: var(--m2-token-function);
+      }
+
+      .token.class-name {
+        color: var(--m2-token-class);
       }
     </style>
     <script type="module" src="${scriptUri}"></script>

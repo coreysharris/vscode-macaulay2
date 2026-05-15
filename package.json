@@ -108,6 +108,24 @@
 					"description": "Controls where 'Send code to Macaulay2 REPL' sends code.",
 					"scope": "window"
 				},
+				"macaulay2.webviewColorTheme": {
+					"type": "string",
+					"default": "vscode",
+					"enum": [
+						"classic",
+						"light",
+						"dark",
+						"vscode"
+					],
+					"enumDescriptions": [
+						"Use the original Macaulay2 webview colors.",
+						"Use a neutral light color theme.",
+						"Use a dark color theme.",
+						"Follow the active VS Code editor colors where available."
+					],
+					"description": "Controls the color theme used by the Macaulay2 webview REPL.",
+					"scope": "window"
+				},
 				"macaulay2.interruptOnControlC": {
 					"type": "boolean",
 					"default": true,
