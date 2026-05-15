@@ -3,6 +3,7 @@ import { Shell } from "./shellEmulator.js";
 declare global {
   interface Window {
     macaulay2CompletionItems?: { label: string; kind: string }[];
+    macaulay2ColorTheme?: string;
   }
 }
 
@@ -10,6 +11,16 @@ declare global {
 const vscode = acquireVsCodeApi();
 
 const outputElement = document.getElementById("terminal");
+
+const supportedColorThemes = new Set(["classic", "light", "dark", "vscode"]);
+
+function applyColorTheme(theme: string | undefined) {
+  const colorTheme =
+    theme && supportedColorThemes.has(theme) ? theme : "vscode";
+  document.documentElement.dataset.macaulay2ColorTheme = colorTheme;
+}
+
+applyColorTheme(window.macaulay2ColorTheme);
 
 window.addEventListener("message", (event) => {
   const message = event.data;
@@ -24,6 +35,9 @@ window.addEventListener("message", (event) => {
       break;
     case "paste":
       myshell.receivePaste(message.data || "");
+      break;
+    case "settings":
+      applyColorTheme(message.colorTheme);
       break;
   }
 });

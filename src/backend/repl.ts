@@ -21,6 +21,7 @@ type WebviewCompletionItem = {
   label: string;
   kind: string;
 };
+type WebviewColorTheme = "classic" | "light" | "dark" | "vscode";
 
 type HelpPanelState = {
   panel: vscode.WebviewPanel;
@@ -95,6 +96,26 @@ function getReplTarget(): ReplTarget {
     .getConfiguration("macaulay2")
     .get<string>("replTarget", "webview");
   return configuredTarget === "terminal" ? "terminal" : "webview";
+}
+
+function getWebviewColorTheme(): WebviewColorTheme {
+  const configuredTheme = vscode.workspace
+    .getConfiguration("macaulay2")
+    .get<string>("webviewColorTheme", "vscode");
+  return configuredTheme === "light" ||
+    configuredTheme === "dark" ||
+    configuredTheme === "classic"
+    ? configuredTheme
+    : "vscode";
+}
+
+function postWebviewSettings() {
+  if (!g_panel) return;
+
+  g_panel.webview.postMessage({
+    type: "settings",
+    colorTheme: getWebviewColorTheme(),
+  });
 }
 
 function getM2ExecutableResolution() {
@@ -438,6 +459,11 @@ function getWebviewContent(
     "webview.html",
   ).fsPath;
   let html = fs.readFileSync(htmlPath, "utf8");
+  const colorTheme = getWebviewColorTheme();
+  html = html.replace(
+    '<html lang="en">',
+    `<html lang="en" data-macaulay2-color-theme="${colorTheme}">`,
+  );
   const scriptUri = webview.asWebviewUri(
     vscode.Uri.joinPath(extensionUri, "media", "main.js"),
   );
@@ -454,9 +480,10 @@ function getWebviewContent(
     /</g,
     "\\u003c",
   );
+  const colorThemeJson = JSON.stringify(colorTheme);
   html = html.replace(
     "</head>",
-    `<script>window.macaulay2CompletionItems = ${completionItemsJson};</script>\n  </head>`,
+    `<script>window.macaulay2CompletionItems = ${completionItemsJson}; window.macaulay2ColorTheme = ${colorThemeJson};</script>\n  </head>`,
   );
   return html;
 }
@@ -925,6 +952,13 @@ export function activate(
     vscode.commands.registerCommand("macaulay2.interruptREPL", interruptM2),
   );
   registerM2ExecutableSwitcher(context, handleM2ExecutableChanged);
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((event) => {
+      if (event.affectsConfiguration("macaulay2.webviewColorTheme")) {
+        postWebviewSettings();
+      }
+    }),
+  );
   context.subscriptions.push(
     vscode.window.onDidCloseTerminal((terminal) => {
       if (terminal === g_terminal) {

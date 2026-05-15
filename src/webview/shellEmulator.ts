@@ -1043,7 +1043,6 @@ const Shell = function (
         const link = document.createElement("a");
         link.textContent = fullMatch;
         link.href = "#";
-        link.style.color = "#4FC3F7";
         link.style.textDecoration = "underline";
         link.style.cursor = "pointer";
 
