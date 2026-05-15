@@ -3,12 +3,17 @@
 "use strict";
 
 import * as vscode from "vscode";
-import * as completions from "./completionProviders";
 import * as repl from "./repl";
 import hljs from "highlight.js/lib/core";
 import hljsM2 from "highlightjs-macaulay2";
 
 hljs.registerLanguage("macaulay2", hljsM2);
+
+type CompletionProviderModule = typeof import("./completionProviders");
+
+function isMacaulay2Document(document: vscode.TextDocument): boolean {
+  return document.languageId === "macaulay2";
+}
 
 // this method is called when your extension is activated
 // your extension is activated the very first time the command is executed
@@ -17,8 +22,56 @@ export function activate(context: vscode.ExtensionContext) {
   // This line of code will only be executed once when your extension is activated
   console.log('Congratulations, your extension "macaulay2" is now active!');
 
-  completions.activate(context);
-  repl.activate(context);
+  let completionsModule: Promise<CompletionProviderModule> | undefined;
+  let completionsActivated = false;
+  let activateCompletionsPromise: Promise<void> | undefined;
+  const loadCompletions = () => {
+    if (!completionsModule) {
+      completionsModule = import("./completionProviders");
+    }
+    return completionsModule;
+  };
+
+  const activateCompletions = () => {
+    if (completionsActivated) {
+      return Promise.resolve();
+    }
+
+    if (!activateCompletionsPromise) {
+      activateCompletionsPromise = loadCompletions().then((completions) => {
+        completions.activate(context);
+        completionsActivated = true;
+      });
+    }
+    return activateCompletionsPromise;
+  };
+
+  const getWebviewCompletionItems = async () => {
+    await activateCompletions();
+    const completions = await loadCompletions();
+    return completions.getWebviewCompletionItems();
+  };
+
+  if (vscode.workspace.textDocuments.some(isMacaulay2Document)) {
+    void activateCompletions();
+  }
+
+  context.subscriptions.push(
+    vscode.workspace.onDidOpenTextDocument((document) => {
+      if (isMacaulay2Document(document)) {
+        void activateCompletions();
+      }
+    }),
+  );
+  context.subscriptions.push(
+    vscode.window.onDidChangeActiveTextEditor((editor) => {
+      if (editor && isMacaulay2Document(editor.document)) {
+        void activateCompletions();
+      }
+    }),
+  );
+
+  repl.activate(context, getWebviewCompletionItems);
 
   return {
     // markdown-it plugin to highlight m2 code in markdown previews

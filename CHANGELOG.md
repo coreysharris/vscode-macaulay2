@@ -6,4 +6,6 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+- Add an optional status bar executable switcher for quickly changing the selected M2 binary.
+
 - Initial release

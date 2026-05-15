@@ -5,7 +5,7 @@ This extension provides support for the Macaulay2 language in Visual Studio Code
 ## Features
 
 - A language grammar (and syntax highlighting)
-![syntax highlighting](https://user-images.githubusercontent.com/186528/54696704-990e3480-4b2c-11e9-9376-3106aa64d618.png)
+  ![syntax highlighting](https://user-images.githubusercontent.com/186528/54696704-990e3480-4b2c-11e9-9376-3106aa64d618.png)
 
 - Code completion with IntelliSense
 
@@ -14,6 +14,8 @@ This extension provides support for the Macaulay2 language in Visual Studio Code
 - Optional terminal-backed evaluation. Run `Macaulay2: Start M2 Terminal` or `Macaulay2: Send code to Macaulay2 Terminal` to use a real VS Code terminal, or set `macaulay2.replTarget` to `terminal` so the normal start/send commands and keybindings target the terminal.
 
 - Automatic Macaulay2 executable detection on macOS and Windows, with an optional manual override via `macaulay2.executablePath`
+
+- Optional executable switcher. Set `macaulay2.showExecutableSwitcher` to `true` and add paths to `macaulay2.executablePathAlternatives` to show a status bar button for switching between M2 binaries.
 
 ## Requirements
 

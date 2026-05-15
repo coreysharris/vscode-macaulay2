@@ -3,17 +3,24 @@ import * as fs from "fs";
 import * as path from "path";
 
 import { spawn, ChildProcess } from "child_process";
-import { getWebviewCompletionItems } from "./completionProviders";
 import { resolveM2Executable } from "./executablePath";
+import { registerM2ExecutableSwitcher } from "./executableSwitcher";
 
 let g_context: vscode.ExtensionContext | undefined;
 let g_panel: vscode.WebviewPanel | undefined;
 let g_terminal: vscode.Terminal | undefined;
+let g_getWebviewCompletionItems:
+  | (() => Promise<WebviewCompletionItem[]>)
+  | undefined;
 let proc: ChildProcess | undefined;
 let procWorkingDir: string | undefined;
 
 type WebviewTopLevelMode = "webview" | "standard";
 type ReplTarget = "webview" | "terminal";
+type WebviewCompletionItem = {
+  label: string;
+  kind: string;
+};
 
 type HelpPanelState = {
   panel: vscode.WebviewPanel;
@@ -232,6 +239,9 @@ async function startREPL(preserveFocus: boolean) {
   if (proc === undefined) {
     // Create or show the webview panel
     if (g_panel === undefined) {
+      const completionItems = g_getWebviewCompletionItems
+        ? await g_getWebviewCompletionItems()
+        : [];
       g_panel = vscode.window.createWebviewPanel(
         "macaulay2Output",
         "Macaulay2 Output",
@@ -245,7 +255,10 @@ async function startREPL(preserveFocus: boolean) {
         },
       );
 
-      g_panel.webview.html = getWebviewContent(g_panel.webview);
+      g_panel.webview.html = getWebviewContent(
+        g_panel.webview,
+        completionItems,
+      );
 
       g_panel.webview.onDidReceiveMessage(handleWebviewMessage);
 
@@ -296,6 +309,62 @@ function startM2Terminal(preserveFocus: boolean): vscode.Terminal | undefined {
   });
   g_terminal.show(preserveFocus);
   return g_terminal;
+}
+
+async function handleM2ExecutableChanged() {
+  const restartActions: string[] = [];
+  if (proc && g_panel) {
+    restartActions.push("Restart REPL");
+  }
+  if (g_terminal && !g_terminal.exitStatus) {
+    restartActions.push("Restart Terminal");
+  }
+
+  if (restartActions.length === 0) {
+    vscode.window.showInformationMessage(
+      "M2 executable updated. New M2 sessions will use the selected executable.",
+    );
+    return;
+  }
+
+  const selectedAction = await vscode.window.showInformationMessage(
+    "M2 executable updated. Running M2 sessions keep their current executable until restarted.",
+    ...restartActions,
+  );
+
+  if (selectedAction === "Restart REPL") {
+    restartM2Process();
+  } else if (selectedAction === "Restart Terminal") {
+    restartM2Terminal();
+  }
+}
+
+function restartM2Process() {
+  if (!g_panel) {
+    return;
+  }
+
+  if (!proc) {
+    startM2();
+    return;
+  }
+
+  const oldProc = proc;
+  proc = undefined;
+  oldProc.once("close", () => {
+    if (g_panel) {
+      startM2();
+    }
+  });
+  oldProc.kill();
+}
+
+function restartM2Terminal() {
+  if (g_terminal) {
+    g_terminal.dispose();
+    g_terminal = undefined;
+  }
+  startM2Terminal(false);
 }
 
 async function executeCodeInTerminal(text: string) {
@@ -358,7 +427,10 @@ function executeSelectionInTerminal() {
   });
 }
 
-function getWebviewContent(webview: vscode.Webview) {
+function getWebviewContent(
+  webview: vscode.Webview,
+  completionItems: WebviewCompletionItem[],
+) {
   const extensionUri = g_context!.extensionUri;
   const htmlPath = vscode.Uri.joinPath(
     extensionUri,
@@ -378,7 +450,7 @@ function getWebviewContent(webview: vscode.Webview) {
     vscode.Uri.joinPath(extensionUri, "media", "minimal.css"),
   );
   html = html.replace("${cssUri}", cssUri.toString());
-  const completionItemsJson = JSON.stringify(getWebviewCompletionItems()).replace(
+  const completionItemsJson = JSON.stringify(completionItems).replace(
     /</g,
     "\\u003c",
   );
@@ -824,14 +896,21 @@ function handleWebviewMessage(message: any) {
   }
 }
 
-export function activate(context: vscode.ExtensionContext) {
+export function activate(
+  context: vscode.ExtensionContext,
+  getWebviewCompletionItems?: () => Promise<WebviewCompletionItem[]>,
+) {
   g_context = context;
+  g_getWebviewCompletionItems = getWebviewCompletionItems;
 
   context.subscriptions.push(
     vscode.commands.registerCommand("macaulay2.startREPL", startREPLCommand),
   );
   context.subscriptions.push(
-    vscode.commands.registerCommand("macaulay2.startTerminal", startTerminalCommand),
+    vscode.commands.registerCommand(
+      "macaulay2.startTerminal",
+      startTerminalCommand,
+    ),
   );
   context.subscriptions.push(
     vscode.commands.registerCommand("macaulay2.sendToREPL", executeSelection),
@@ -845,6 +924,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand("macaulay2.interruptREPL", interruptM2),
   );
+  registerM2ExecutableSwitcher(context, handleM2ExecutableChanged);
   context.subscriptions.push(
     vscode.window.onDidCloseTerminal((terminal) => {
       if (terminal === g_terminal) {

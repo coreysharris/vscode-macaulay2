@@ -4,7 +4,13 @@
 //
 
 // The module 'assert' provides assertion methods from node
-import * as assert from 'assert';
+import * as assert from "assert";
+
+import {
+  formatM2ExecutablePathForStatusBar,
+  getM2ExecutablePathOptions,
+  getM2ExecutableStatusText,
+} from "../executableSwitcher";
 
 // You can import and use all API from the 'vscode' module
 // as well as import your extension to test it
@@ -13,10 +19,36 @@ import * as assert from 'assert';
 
 // Defines a Mocha test suite to group tests of similar kind together
 suite("Extension Tests", function () {
+  // Defines a Mocha unit test
+  test("Something 1", function () {
+    assert.equal(-1, [1, 2, 3].indexOf(5));
+    assert.equal(-1, [1, 2, 3].indexOf(0));
+  });
+});
 
-    // Defines a Mocha unit test
-    test("Something 1", function() {
-        assert.equal(-1, [1, 2, 3].indexOf(5));
-        assert.equal(-1, [1, 2, 3].indexOf(0));
-    });
+suite("Executable Switcher", function () {
+  test("keeps the current executable first and removes duplicates", function () {
+    assert.deepEqual(
+      getM2ExecutablePathOptions("/opt/m2/bin/M2", [
+        "/usr/local/bin/M2",
+        "/opt/m2/bin/M2",
+        "  ",
+      ]),
+      ["/opt/m2/bin/M2", "/usr/local/bin/M2"],
+    );
+  });
+
+  test("formats compact labels for bin directories", function () {
+    assert.equal(
+      formatM2ExecutablePathForStatusBar("/Applications/Macaulay2-1.26/bin/M2"),
+      "Macaulay2-1.26/bin/M2",
+    );
+  });
+
+  test("shows when auto-detection cannot find M2", function () {
+    assert.equal(
+      getM2ExecutableStatusText(undefined, undefined),
+      "$(terminal) M2: not found",
+    );
+  });
 });
