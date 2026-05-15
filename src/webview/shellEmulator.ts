@@ -81,6 +81,7 @@ const Shell = function (
   // input is a bit messy...
   let inputEndFlag = false;
   let procInputSpan = null; // temporary span containing currently processed input (for aesthetics only)
+  let pendingErrorOutput = "";
   let interpreterDepth = 1;
 
   const isEmptyCell = function (el) {
@@ -725,6 +726,26 @@ const Shell = function (
     return el == terminal;
   };
 
+  const isOpenInputSection = function () {
+    return htmlSec && htmlSec.classList.contains("M2Input");
+  };
+
+  const shouldDeferErrorOutput = function () {
+    // stdout/stderr arrive on separate pipes, so stderr can beat M2's input echo.
+    return (
+      createInputSpan &&
+      (procInputSpan !== null || inputEndFlag || isOpenInputSection())
+    );
+  };
+
+  const flushPendingErrorOutput = function (force = false) {
+    if (pendingErrorOutput.length == 0) return;
+    if (!force && shouldDeferErrorOutput()) return;
+    const msg = pendingErrorOutput;
+    pendingErrorOutput = "";
+    displayText(msg);
+  };
+
   const sessionCell = function (el: HTMLElement) {
     while (el && el.parentElement != terminal) {
       el = el.parentElement;
@@ -733,6 +754,7 @@ const Shell = function (
   };
 
   const closeHtml = function () {
+    const closingInput = htmlSec.classList.contains("M2Input");
     let anc = htmlSec.parentElement;
 
     if (htmlSec.classList.contains("M2Input"))
@@ -916,28 +938,19 @@ const Shell = function (
       subList.push([str, htmlSec]);
     }
     htmlSec = anc;
+    if (closingInput) flushPendingErrorOutput(true);
   };
 
   obj.displayOutput = function (msg: string, isErrorOutput = false) {
     obj.openedHelp = false;
+    if (isErrorOutput && shouldDeferErrorOutput()) {
+      pendingErrorOutput += msg;
+      scrollDownLeft(terminal);
+      return;
+    }
     if (procInputSpan !== null) {
       procInputSpan.remove();
       procInputSpan = null;
-    }
-    if (isErrorOutput && htmlSec.classList.contains("M2Input")) {
-      const activeHtmlSec = htmlSec;
-      const activeCell = activeHtmlSec.parentElement as HTMLElement;
-      const previousCell = activeCell?.previousElementSibling as HTMLElement;
-      if (previousCell) htmlSec = previousCell;
-      else if (activeCell?.parentElement) {
-        htmlSec = document.createElement("span");
-        htmlSec.className = "M2Text";
-        activeCell.parentElement.insertBefore(htmlSec, activeCell);
-      } else htmlSec = terminal;
-      displayText(msg);
-      htmlSec = activeHtmlSec;
-      scrollDownLeft(terminal);
-      return;
     }
     const txt = msg.replace(/\r/g, "").split(webAppRegex);
     for (let i = 0; i < txt.length; i += 2) {
@@ -999,6 +1012,7 @@ const Shell = function (
         // all other states are raw text -- don't rewrite htmlSec.textContent+=txt[i] in case of input
       }
     }
+    flushPendingErrorOutput();
     scrollDownLeft(terminal);
   };
 
