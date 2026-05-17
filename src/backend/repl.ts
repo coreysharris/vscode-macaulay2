@@ -19,8 +19,9 @@ let g_getWebviewCompletionItems:
   | undefined;
 let proc: ChildProcess | undefined;
 let procWorkingDir: string | undefined;
+let shouldRestoreEditorFocusAfterWebviewOutput = false;
+let editorToRestoreAfterWebviewOutput: vscode.TextEditor | undefined;
 
-export type WebviewTopLevelMode = "webview" | "standard";
 type ReplTarget = "webview" | "terminal";
 type WebviewCompletionItem = {
   label: string;
@@ -95,26 +96,12 @@ export function getM2StartupPatch(): string {
   ].join(" ");
 }
 
-function getWebviewTopLevelMode(): WebviewTopLevelMode {
-  const configuredMode = vscode.workspace
-    .getConfiguration("macaulay2")
-    .get<string>("webviewTopLevelMode", "webview");
-  return configuredMode === "standard" ? "standard" : "webview";
-}
-
 function getM2StartupExpression(): string {
   return getM2StartupPatch();
 }
 
-export function getM2WebviewProcessArgs(
-  topLevelMode: WebviewTopLevelMode,
-  startupExpression: string,
-): string[] {
-  return [
-    ...(topLevelMode === "webview" ? ["--webapp"] : []),
-    "-e",
-    startupExpression,
-  ];
+export function getM2WebviewProcessArgs(startupExpression: string): string[] {
+  return ["--webapp", "-e", startupExpression];
 }
 
 function getM2LaunchArgs(): M2LaunchArgsConfiguration {
@@ -226,7 +213,7 @@ function startM2() {
   const workingDir = getM2WorkingDir();
   const launch = getM2LaunchConfiguration(
     resolution,
-    getM2WebviewProcessArgs(getWebviewTopLevelMode(), getM2StartupExpression()),
+    getM2WebviewProcessArgs(getM2StartupExpression()),
     workingDir,
     getM2LaunchArgs(),
   );
@@ -318,6 +305,7 @@ async function startREPL(preserveFocus: boolean) {
       g_panel.webview.html = getWebviewContent(
         g_panel.webview,
         completionItems,
+        !preserveFocus,
       );
 
       g_panel.webview.onDidReceiveMessage(handleWebviewMessage);
@@ -334,11 +322,16 @@ async function startREPL(preserveFocus: boolean) {
   }
 }
 
-async function executeCode(text: string) {
+async function executeCode(text: string, restoreEditorFocus = false) {
+  const editorToRestore = restoreEditorFocus
+    ? vscode.window.activeTextEditor
+    : undefined;
   await startREPL(true);
 
   text = normalizeM2Input(text);
   if (proc && proc.stdin) {
+    shouldRestoreEditorFocusAfterWebviewOutput = restoreEditorFocus;
+    editorToRestoreAfterWebviewOutput = editorToRestore;
     proc.stdin.write(text);
   } else {
     vscode.window.showErrorMessage("Macaulay2 process is not running.");
@@ -450,7 +443,7 @@ async function executeCodeForConfiguredTarget(text: string) {
     return;
   }
 
-  await executeCode(text);
+  await executeCode(text, true);
 }
 
 function getSelectedM2Code(): string | undefined {
@@ -497,6 +490,7 @@ function executeSelectionInTerminal() {
 function getWebviewContent(
   webview: vscode.Webview,
   completionItems: WebviewCompletionItem[],
+  focusInputOnLoad = true,
 ) {
   const extensionUri = g_context!.extensionUri;
   const htmlPath = vscode.Uri.joinPath(
@@ -527,9 +521,10 @@ function getWebviewContent(
     "\\u003c",
   );
   const colorThemeJson = JSON.stringify(colorTheme);
+  const focusInputOnLoadJson = JSON.stringify(focusInputOnLoad);
   html = html.replace(
     "</head>",
-    `<script>window.macaulay2CompletionItems = ${completionItemsJson}; window.macaulay2ColorTheme = ${colorThemeJson};</script>\n  </head>`,
+    `<script>window.macaulay2CompletionItems = ${completionItemsJson}; window.macaulay2ColorTheme = ${colorThemeJson}; window.macaulay2FocusInputOnLoad = ${focusInputOnLoadJson};</script>\n  </head>`,
   );
   return html;
 }
@@ -958,7 +953,12 @@ function handleWebviewMessage(message: any) {
       openHelpUrl(message.data).catch(reportHelpOpenError);
       break;
     case "focus":
-      const editor = vscode.window.activeTextEditor;
+      if (!shouldRestoreEditorFocusAfterWebviewOutput) {
+        break;
+      }
+      shouldRestoreEditorFocusAfterWebviewOutput = false;
+      const editor = editorToRestoreAfterWebviewOutput;
+      editorToRestoreAfterWebviewOutput = undefined;
       if (editor)
         vscode.window.showTextDocument(
           editor!.document,

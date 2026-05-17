@@ -4,6 +4,7 @@ declare global {
   interface Window {
     macaulay2CompletionItems?: { label: string; kind: string }[];
     macaulay2ColorTheme?: string;
+    macaulay2FocusInputOnLoad?: boolean;
   }
 }
 
@@ -53,6 +54,7 @@ const myshell = new Shell(
   null,
   true,
   window.macaulay2CompletionItems || [],
+  window.macaulay2FocusInputOnLoad !== false,
 );
 
 console.log("Shell created.");

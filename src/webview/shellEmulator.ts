@@ -67,6 +67,7 @@ const Shell = function (
   iFrame: HTMLFrameElement,
   createInputSpan: boolean,
   completionItems: CompletionItem[] = [],
+  focusInputOnLoad = true,
 ) {
   // Shell is an old-style javascript oop constructor
   // we're using arguments as private variables, cf
@@ -175,7 +176,7 @@ const Shell = function (
     createHtml(webAppClasses[webAppTags.Cell]); // and one for the starting text (Macaulay2 version... or whatever comes out of M2 first)
     htmlSec.appendChild(inputSpan);
 
-    inputSpan.focus();
+    if (focusInputOnLoad) inputSpan.focus();
 
     inputEndFlag = false;
   };
@@ -1182,7 +1183,7 @@ const Shell = function (
     }, 100);
   };
 
-  if (inputSpan)
+  if (inputSpan && focusInputOnLoad)
     window.addEventListener("load", function () {
       inputSpan.focus();
     });

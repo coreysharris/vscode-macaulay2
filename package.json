@@ -107,20 +107,6 @@
 					"description": "Show a status bar button for quickly switching the Macaulay2 executable.",
 					"scope": "application"
 				},
-				"macaulay2.webviewTopLevelMode": {
-					"type": "string",
-					"default": "webview",
-					"enum": [
-						"webview",
-						"standard"
-					],
-					"enumDescriptions": [
-						"Start M2 with --webapp for WebApp-formatted output.",
-						"Start M2 without --webapp for standard top-level output."
-					],
-					"description": "Controls whether the VS Code webview REPL starts M2 with --webapp or standard top-level output.",
-					"scope": "window"
-				},
 				"macaulay2.replTarget": {
 					"type": "string",
 					"default": "webview",
@@ -129,10 +115,10 @@
 						"terminal"
 					],
 					"enumDescriptions": [
-						"Send code to the extension's existing HTML webview REPL.",
-						"Send code to a real VS Code terminal running Macaulay2."
+						"Send code to the extension's WebApp-formatted HTML webview REPL.",
+						"Send code to a standard Macaulay2 session in a real VS Code terminal."
 					],
-					"description": "Controls where 'Send code to Macaulay2 REPL' sends code.",
+					"description": "Controls whether Macaulay2 REPL output goes to the WebApp-formatted webview or to a standard VS Code terminal.",
 					"scope": "window"
 				},
 				"macaulay2.webviewColorTheme": {

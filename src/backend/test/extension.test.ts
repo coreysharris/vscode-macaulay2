@@ -93,13 +93,9 @@ suite("Executable Launch", function () {
     assert.notEqual(patch.indexOf("if #m > 0 then code m"), -1);
   });
 
-  test("builds webview process args from the configured top-level mode", function () {
-    assert.deepEqual(getM2WebviewProcessArgs("webview", "startupPatch"), [
+  test("builds webview process args for WebApp output", function () {
+    assert.deepEqual(getM2WebviewProcessArgs("startupPatch"), [
       "--webapp",
-      "-e",
-      "startupPatch",
-    ]);
-    assert.deepEqual(getM2WebviewProcessArgs("standard", "startupPatch"), [
       "-e",
       "startupPatch",
     ]);
