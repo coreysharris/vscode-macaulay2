@@ -148,8 +148,7 @@
         box-sizing: border-box;
         max-width: 100%;
         min-width: 0;
-        overflow-x: auto;
-        padding-right: 2ch;
+        overflow-x: hidden;
       }
 
       .M2Input {
@@ -158,11 +157,22 @@
 
       .M2PastInput,
       .M2CurrentInput {
-        left: 0;
         overflow-wrap: anywhere;
-        position: sticky;
         white-space: pre-wrap;
         z-index: 2;
+      }
+
+      .M2OutputScroll {
+        box-sizing: border-box;
+        display: inline-block;
+        max-width: 100%;
+        overflow-x: auto;
+        padding-right: 10ch;
+        vertical-align: top;
+      }
+
+      .M2OutputScroll > .M2Html {
+        max-width: none;
       }
 
       .M2Html {

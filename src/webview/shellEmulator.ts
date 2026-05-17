@@ -108,6 +108,26 @@ const Shell = function (
     );
   };
 
+  const outputScrollClass = "M2OutputScroll";
+
+  const outputScrollContainer = function (
+    cell: HTMLElement,
+    beforeNode?: Node | null,
+  ) {
+    const previous =
+      beforeNode instanceof Element
+        ? beforeNode.previousElementSibling
+        : cell.lastElementChild;
+    if (previous && previous.classList.contains(outputScrollClass))
+      return previous as HTMLElement;
+
+    const output = document.createElement("span");
+    output.className = outputScrollClass;
+    if (beforeNode) cell.insertBefore(output, beforeNode);
+    else cell.appendChild(output);
+    return output;
+  };
+
   const createHtml = function (className) {
     const cell = className.indexOf("M2Cell") >= 0; // a bit special
     const anc = htmlSec;
@@ -904,6 +924,8 @@ const Shell = function (
       if (url) openHelp(url);
     }
     htmlSec.removeAttribute("data-code");
+    if (htmlSec.classList.contains("M2Html") && anc.classList.contains("M2Cell"))
+      outputScrollContainer(anc, htmlSec).appendChild(htmlSec);
     if (anc.classList.contains("M2Html") && anc.dataset.code != "") {
       // stack
       // in case it's inside TeX, we compute dimensions
@@ -1017,6 +1039,21 @@ const Shell = function (
   };
 
   const displayText = function (msg) {
+    const displayTarget = function (txt: string) {
+      if (!htmlSec.classList.contains("M2Cell")) return htmlSec;
+      if (/^[\s:=]*$/.test(txt)) return htmlSec;
+      return outputScrollContainer(
+        htmlSec,
+        inputSpan && inputSpan.parentElement == htmlSec ? inputSpan : null,
+      );
+    };
+    const target = displayTarget(msg);
+    const appendNode = function (node: Node) {
+      if (target == htmlSec && inputSpan && inputSpan.parentElement == htmlSec)
+        htmlSec.insertBefore(node, inputSpan);
+      else target.appendChild(node);
+    };
+
     // Check if the message contains file paths with line numbers (Macaulay2 error format)
     // Common patterns: "filename.m2:123:" or "filename.m2:123:456:"
     const errorPattern = /([^\s:]+\.m2):(\d+)(?::(\d+))?:/g;
@@ -1033,9 +1070,7 @@ const Shell = function (
         if (match.index > lastIndex) {
           const textBefore = msg.substring(lastIndex, match.index);
           const textNode = document.createTextNode(textBefore);
-          if (inputSpan && inputSpan.parentElement == htmlSec)
-            htmlSec.insertBefore(textNode, inputSpan);
-          else htmlSec.appendChild(textNode);
+          appendNode(textNode);
         }
 
         // Create clickable link for the file path
@@ -1057,9 +1092,7 @@ const Shell = function (
           emit("open", fragment);
         };
 
-        if (inputSpan && inputSpan.parentElement == htmlSec)
-          htmlSec.insertBefore(link, inputSpan);
-        else htmlSec.appendChild(link);
+        appendNode(link);
 
         lastIndex = match.index + fullMatch.length;
       }
@@ -1068,16 +1101,12 @@ const Shell = function (
       if (lastIndex < msg.length) {
         const textAfter = msg.substring(lastIndex);
         const textNode = document.createTextNode(textAfter);
-        if (inputSpan && inputSpan.parentElement == htmlSec)
-          htmlSec.insertBefore(textNode, inputSpan);
-        else htmlSec.appendChild(textNode);
+        appendNode(textNode);
       }
     } else {
       // No error patterns found, display text normally
       const node = document.createTextNode(msg);
-      if (inputSpan && inputSpan.parentElement == htmlSec)
-        htmlSec.insertBefore(node, inputSpan);
-      else htmlSec.appendChild(node);
+      appendNode(node);
     }
   };
 
