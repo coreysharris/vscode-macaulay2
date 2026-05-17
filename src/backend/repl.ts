@@ -6,6 +6,7 @@ import { spawn, ChildProcess } from "child_process";
 import {
   getM2ExecutableResolutionDetail,
   getM2LaunchConfiguration,
+  M2LaunchArgsConfiguration,
   resolveM2Executable,
 } from "./executablePath";
 import { registerM2ExecutableSwitcher } from "./executableSwitcher";
@@ -19,7 +20,7 @@ let g_getWebviewCompletionItems:
 let proc: ChildProcess | undefined;
 let procWorkingDir: string | undefined;
 
-type WebviewTopLevelMode = "webview" | "standard";
+export type WebviewTopLevelMode = "webview" | "standard";
 type ReplTarget = "webview" | "terminal";
 type WebviewCompletionItem = {
   label: string;
@@ -85,14 +86,25 @@ function getWebviewTopLevelMode(): WebviewTopLevelMode {
   return configuredMode === "standard" ? "standard" : "webview";
 }
 
-function getM2TopLevelMode(): "WebApp" | "Standard" {
-  return getWebviewTopLevelMode() === "standard" ? "Standard" : "WebApp";
+function getM2StartupExpression(): string {
+  return getM2StartupPatch();
 }
 
-function getM2StartupExpression(): string {
-  return [`topLevelMode = ${getM2TopLevelMode()};`, getM2StartupPatch()].join(
-    " ",
-  );
+export function getM2WebviewProcessArgs(
+  topLevelMode: WebviewTopLevelMode,
+  startupExpression: string,
+): string[] {
+  return [
+    ...(topLevelMode === "webview" ? ["--webapp"] : []),
+    "-e",
+    startupExpression,
+  ];
+}
+
+function getM2LaunchArgs(): M2LaunchArgsConfiguration {
+  return vscode.workspace
+    .getConfiguration("macaulay2")
+    .get<string>("launchArgs", "");
 }
 
 function getReplTarget(): ReplTarget {
@@ -198,8 +210,9 @@ function startM2() {
   const workingDir = getM2WorkingDir();
   const launch = getM2LaunchConfiguration(
     resolution,
-    ["--webapp", "-e", getM2StartupExpression()],
+    getM2WebviewProcessArgs(getWebviewTopLevelMode(), getM2StartupExpression()),
     workingDir,
+    getM2LaunchArgs(),
   );
 
   // Spawn M2 directly (no shell) so signals like SIGINT reach the M2 process.
@@ -333,7 +346,12 @@ function startM2Terminal(preserveFocus: boolean): vscode.Terminal | undefined {
   }
 
   const workingDir = getM2WorkingDir();
-  const launch = getM2LaunchConfiguration(resolution, [], workingDir);
+  const launch = getM2LaunchConfiguration(
+    resolution,
+    [],
+    workingDir,
+    getM2LaunchArgs(),
+  );
   g_terminal = vscode.window.createTerminal({
     name: "Macaulay2",
     shellPath: launch.executablePath,

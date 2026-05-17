@@ -39,8 +39,9 @@ If the extension cannot find Macaulay2, set `macaulay2.executablePath` to the fu
 | Setting | Default | Description |
 | --- | --- | --- |
 | `macaulay2.executablePath` | `""` | Optional path to the `M2` executable. Leave empty to auto-detect. |
+| `macaulay2.launchArgs` | `""` | Additional command-line arguments passed to `M2` when starting REPL sessions, for example `--print-width 50`. |
 | `macaulay2.replTarget` | `webview` | Choose whether the main start/send commands target the webview REPL or terminal REPL. |
-| `macaulay2.webviewTopLevelMode` | `webview` | Choose `WebApp` mode for the webview REPL, or `standard` for standard top-level mode. |
+| `macaulay2.webviewTopLevelMode` | `webview` | Choose whether the webview REPL starts M2 with `--webapp` or standard top-level output. |
 | `macaulay2.webviewColorTheme` | `vscode` | Choose the webview REPL color theme: `classic`, `light`, `dark`, or `vscode`. |
 | `macaulay2.interruptOnControlC` | `true` | Enable `Ctrl+C` as a webview interrupt shortcut on macOS. |
 

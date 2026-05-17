@@ -85,6 +85,13 @@
 					"description": "Optional override for the Macaulay2 executable. Leave empty to auto-detect it.",
 					"scope": "application"
 				},
+				"macaulay2.launchArgs": {
+					"type": "string",
+					"default": "",
+					"description": "Additional command-line arguments passed to M2 when starting REPL sessions.",
+					"markdownDescription": "Additional command-line arguments passed to M2 when starting REPL sessions, for example `--print-width 50`.",
+					"scope": "window"
+				},
 				"macaulay2.executablePathAlternatives": {
 					"type": "array",
 					"default": [],
@@ -108,10 +115,10 @@
 						"standard"
 					],
 					"enumDescriptions": [
-						"Run the Macaulay2 webview REPL with topLevelMode = WebApp.",
-						"Run the Macaulay2 webview REPL with topLevelMode = Standard."
+						"Start M2 with --webapp for WebApp-formatted output.",
+						"Start M2 without --webapp for standard top-level output."
 					],
-					"description": "Controls Macaulay2's topLevelMode inside the VS Code webview REPL.",
+					"description": "Controls whether the VS Code webview REPL starts M2 with --webapp or standard top-level output.",
 					"scope": "window"
 				},
 				"macaulay2.replTarget": {

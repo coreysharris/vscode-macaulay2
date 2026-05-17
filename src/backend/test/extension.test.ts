@@ -13,8 +13,10 @@ import {
 } from "../executableSwitcher";
 import {
   getM2LaunchConfiguration,
+  normalizeM2LaunchArgs,
   windowsPathToWslPath,
 } from "../executablePath";
+import { getM2WebviewProcessArgs } from "../repl";
 
 // You can import and use all API from the 'vscode' module
 // as well as import your extension to test it
@@ -80,6 +82,34 @@ suite("Executable Switcher", function () {
 });
 
 suite("Executable Launch", function () {
+  test("builds webview process args from the configured top-level mode", function () {
+    assert.deepEqual(getM2WebviewProcessArgs("webview", "startupPatch"), [
+      "--webapp",
+      "-e",
+      "startupPatch",
+    ]);
+    assert.deepEqual(getM2WebviewProcessArgs("standard", "startupPatch"), [
+      "-e",
+      "startupPatch",
+    ]);
+  });
+
+  test("normalizes configured M2 launch arguments", function () {
+    assert.deepEqual(
+      normalizeM2LaunchArgs(" --silent   --print-width 120 "),
+      ["--silent", "--print-width", "120"],
+    );
+    assert.deepEqual(normalizeM2LaunchArgs(""), []);
+    assert.deepEqual(normalizeM2LaunchArgs("--print-width 50"), [
+      "--print-width",
+      "50",
+    ]);
+    assert.deepEqual(
+      normalizeM2LaunchArgs("--prefix '/tmp/Macaulay2 Prefix'"),
+      ["--prefix", "/tmp/Macaulay2 Prefix"],
+    );
+  });
+
   test("converts Windows drive paths to WSL mount paths", function () {
     assert.equal(
       windowsPathToWslPath("C:\\Users\\Admin\\m2-project"),
@@ -106,6 +136,22 @@ suite("Executable Launch", function () {
     );
   });
 
+  test("adds configured launch arguments after built-in M2 args", function () {
+    assert.deepEqual(
+      getM2LaunchConfiguration(
+        { executablePath: "/usr/local/bin/M2", source: "PATH" },
+        ["--webapp"],
+        "/Users/admin/project",
+        "--print-width 50",
+      ),
+      {
+        executablePath: "/usr/local/bin/M2",
+        args: ["--webapp", "--print-width", "50"],
+        cwd: "/Users/admin/project",
+      },
+    );
+  });
+
   test("builds a WSL M2 launch configuration", function () {
     assert.deepEqual(
       getM2LaunchConfiguration(
@@ -125,6 +171,32 @@ suite("Executable Launch", function () {
           "--exec",
           "/usr/bin/M2",
           "--webapp",
+        ],
+      },
+    );
+  });
+
+  test("adds configured launch arguments to WSL M2 invocations", function () {
+    assert.deepEqual(
+      getM2LaunchConfiguration(
+        {
+          executablePath: "C:\\Windows\\System32\\wsl.exe",
+          source: "WSL",
+          wslExecutablePath: "/usr/bin/M2",
+        },
+        ["--webapp"],
+        "C:\\Users\\Admin\\m2-project",
+        "--silent",
+      ),
+      {
+        executablePath: "C:\\Windows\\System32\\wsl.exe",
+        args: [
+          "--cd",
+          "/mnt/c/Users/Admin/m2-project",
+          "--exec",
+          "/usr/bin/M2",
+          "--webapp",
+          "--silent",
         ],
       },
     );

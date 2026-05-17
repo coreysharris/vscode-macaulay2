@@ -15,6 +15,8 @@ export interface M2LaunchConfiguration {
   cwd?: string;
 }
 
+export type M2LaunchArgsConfiguration = string | undefined;
+
 export function resolveM2Executable(
   configuredPath?: string,
 ): M2ExecutableResolution | undefined {
@@ -81,7 +83,10 @@ export function getM2LaunchConfiguration(
   resolution: M2ExecutableResolution,
   args: string[],
   workingDir: string,
+  additionalArgs: M2LaunchArgsConfiguration = "",
 ): M2LaunchConfiguration {
+  const m2Args = [...args, ...normalizeM2LaunchArgs(additionalArgs)];
+
   if (resolution.wslExecutablePath) {
     return {
       executablePath: resolution.executablePath,
@@ -90,16 +95,86 @@ export function getM2LaunchConfiguration(
         windowsPathToWslPath(workingDir) || "~",
         "--exec",
         resolution.wslExecutablePath,
-        ...args,
+        ...m2Args,
       ],
     };
   }
 
   return {
     executablePath: resolution.executablePath,
-    args,
+    args: m2Args,
     cwd: workingDir,
   };
+}
+
+export function normalizeM2LaunchArgs(
+  args: M2LaunchArgsConfiguration,
+): string[] {
+  if (!args?.trim()) {
+    return [];
+  }
+
+  return splitM2LaunchArgs(args);
+}
+
+function splitM2LaunchArgs(args: string): string[] {
+  const result: string[] = [];
+  let current = "";
+  let quote: string | undefined;
+  let escaping = false;
+  let tokenStarted = false;
+
+  for (const char of args.trim()) {
+    if (escaping) {
+      current += char;
+      escaping = false;
+      tokenStarted = true;
+      continue;
+    }
+
+    if (char === "\\" && quote !== "'") {
+      escaping = true;
+      tokenStarted = true;
+      continue;
+    }
+
+    if (quote) {
+      if (char === quote) {
+        quote = undefined;
+      } else {
+        current += char;
+      }
+      tokenStarted = true;
+      continue;
+    }
+
+    if (char === "'" || char === '"') {
+      quote = char;
+      tokenStarted = true;
+      continue;
+    }
+
+    if (/\s/.test(char)) {
+      if (tokenStarted) {
+        result.push(current);
+        current = "";
+        tokenStarted = false;
+      }
+      continue;
+    }
+
+    current += char;
+    tokenStarted = true;
+  }
+
+  if (escaping) {
+    current += "\\";
+  }
+  if (tokenStarted) {
+    result.push(current);
+  }
+
+  return result;
 }
 
 export function getM2ExecutableResolutionDetail(
