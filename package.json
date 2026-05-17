@@ -30,12 +30,12 @@
 				"title": "Start M2 Terminal"
 			},
 			{
-				"command": "macaulay2.sendToREPL",
-				"title": "Send code to Macaulay2 REPL"
+				"command": "macaulay2.sendToWebview",
+				"title": "Send Line or Selection to Macaulay2 Webview"
 			},
 			{
 				"command": "macaulay2.sendToTerminal",
-				"title": "Send code to Macaulay2 Terminal"
+				"title": "Send Line or Selection to Macaulay2 Terminal"
 			},
 			{
 				"command": "macaulay2.interruptREPL",
@@ -107,20 +107,6 @@
 					"description": "Show a status bar button for quickly switching the Macaulay2 executable.",
 					"scope": "application"
 				},
-				"macaulay2.replTarget": {
-					"type": "string",
-					"default": "webview",
-					"enum": [
-						"webview",
-						"terminal"
-					],
-					"enumDescriptions": [
-						"Send code to the extension's WebApp-formatted HTML webview REPL.",
-						"Send code to a standard Macaulay2 session in a real VS Code terminal."
-					],
-					"description": "Controls whether Macaulay2 REPL output goes to the WebApp-formatted webview or to a standard VS Code terminal.",
-					"scope": "window"
-				},
 				"macaulay2.webviewColorTheme": {
 					"type": "string",
 					"default": "vscode",
@@ -149,9 +135,14 @@
 		},
 		"keybindings": [
 			{
-				"command": "macaulay2.sendToREPL",
+				"command": "macaulay2.sendToWebview",
 				"key": "shift+Enter",
-				"when": "editorLangId == macaulay2"
+				"when": "editorTextFocus && editorLangId == macaulay2"
+			},
+			{
+				"command": "macaulay2.sendToTerminal",
+				"key": "ctrl+enter",
+				"when": "editorTextFocus && editorLangId == macaulay2"
 			},
 			{
 				"command": "macaulay2.startREPL",
@@ -163,6 +154,20 @@
 				"when": "isMac && config.macaulay2.interruptOnControlC && activeWebviewPanelId == 'macaulay2Output'"
 			}
 		],
+		"menus": {
+			"editor/context": [
+				{
+					"command": "macaulay2.sendToTerminal",
+					"when": "editorLangId == macaulay2",
+					"group": "1_modification@5"
+				},
+				{
+					"command": "macaulay2.sendToWebview",
+					"when": "editorLangId == macaulay2",
+					"group": "1_modification@6"
+				}
+			]
+		},
 		"problemMatchers": [
 			{
 				"name": "macaulay2",

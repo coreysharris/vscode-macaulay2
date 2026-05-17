@@ -22,7 +22,6 @@ let procWorkingDir: string | undefined;
 let shouldRestoreEditorFocusAfterWebviewOutput = false;
 let editorToRestoreAfterWebviewOutput: vscode.TextEditor | undefined;
 
-type ReplTarget = "webview" | "terminal";
 type WebviewCompletionItem = {
   label: string;
   kind: string;
@@ -108,13 +107,6 @@ function getM2LaunchArgs(): M2LaunchArgsConfiguration {
   return vscode.workspace
     .getConfiguration("macaulay2")
     .get<string>("launchArgs", "");
-}
-
-function getReplTarget(): ReplTarget {
-  const configuredTarget = vscode.workspace
-    .getConfiguration("macaulay2")
-    .get<string>("replTarget", "webview");
-  return configuredTarget === "terminal" ? "terminal" : "webview";
 }
 
 function getWebviewColorTheme(): WebviewColorTheme {
@@ -274,11 +266,6 @@ function startM2() {
 }
 
 function startREPLCommand() {
-  if (getReplTarget() === "terminal") {
-    startM2Terminal(false);
-    return;
-  }
-
   startREPL(false);
 }
 
@@ -437,15 +424,6 @@ async function executeCodeInTerminal(text: string) {
   terminal.sendText(text, false);
 }
 
-async function executeCodeForConfiguredTarget(text: string) {
-  if (getReplTarget() === "terminal") {
-    await executeCodeInTerminal(text);
-    return;
-  }
-
-  await executeCode(text, true);
-}
-
 function getSelectedM2Code(): string | undefined {
   var editor = vscode.window.activeTextEditor;
   if (!editor) {
@@ -458,21 +436,6 @@ function getSelectedM2Code(): string | undefined {
     : editor.document.getText(selection);
 }
 
-function executeSelection() {
-  const text = getSelectedM2Code();
-  if (text === undefined) {
-    return;
-  }
-
-  executeCodeForConfiguredTarget(text);
-  // Move the cursor to the next line
-  vscode.commands.executeCommand("cursorMove", {
-    to: "down",
-    by: "line",
-    value: 1,
-  });
-}
-
 function executeSelectionInTerminal() {
   const text = getSelectedM2Code();
   if (text === undefined) {
@@ -480,6 +443,20 @@ function executeSelectionInTerminal() {
   }
 
   executeCodeInTerminal(text);
+  vscode.commands.executeCommand("cursorMove", {
+    to: "down",
+    by: "line",
+    value: 1,
+  });
+}
+
+function executeSelectionInWebview() {
+  const text = getSelectedM2Code();
+  if (text === undefined) {
+    return;
+  }
+
+  executeCode(text, true);
   vscode.commands.executeCommand("cursorMove", {
     to: "down",
     by: "line",
@@ -863,9 +840,7 @@ function interruptM2() {
   if (
     g_terminal &&
     !g_terminal.exitStatus &&
-    (getReplTarget() === "terminal" ||
-      vscode.window.activeTerminal === g_terminal ||
-      !proc)
+    (vscode.window.activeTerminal === g_terminal || !proc)
   ) {
     g_terminal.sendText("\x03", false);
     return;
@@ -986,7 +961,16 @@ export function activate(
     ),
   );
   context.subscriptions.push(
-    vscode.commands.registerCommand("macaulay2.sendToREPL", executeSelection),
+    vscode.commands.registerCommand(
+      "macaulay2.sendToREPL",
+      executeSelectionInWebview,
+    ),
+  );
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "macaulay2.sendToWebview",
+      executeSelectionInWebview,
+    ),
   );
   context.subscriptions.push(
     vscode.commands.registerCommand(
