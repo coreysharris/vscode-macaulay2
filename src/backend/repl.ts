@@ -38,17 +38,33 @@ const helpPanels = new Set<HelpPanelState>();
 // In WebApp mode, some help pages fail while processing example output.
 // Keep native help where it works, and fall back to the top documentation node.
 // Also expand ordinary method functions through their installed methods when
-// `code f` has no direct source body to show. WebApp also overrides some
-// texMath methods through html, which can recurse back into texMath; restore
-// direct LaTeX paths for affected core types.
-function getM2StartupPatch(): string {
+// `code f` has no direct source body to show. WebApp also calls realpath while
+// converting source-location links, but macOS realpath rejects paths containing
+// #L anchors; render FilePosition links directly so code output keeps its
+// styled Hypertext form. WebApp also overrides some texMath methods through
+// html, which can recurse back into texMath; restore direct LaTeX paths for
+// affected core types.
+export function getM2StartupPatch(): string {
   return [
+    "try (",
+    "local toURLFun, urlEncodeFun, htmlLiteralFun;",
+    'toURLFun = value ((Core#"private dictionary")#"toURL");',
+    'urlEncodeFun = value ((Core#"private dictionary")#"urlEncode");',
+    'htmlLiteralFun = value ((Core#"private dictionary")#"htmlLiteral");',
+    'html FilePosition := p -> concatenate("<samp><a href=\\"", htmlLiteralFun (urlEncodeFun (toURLFun p)), "\\">", htmlLiteralFun (toString p), "</a></samp>");',
+    ') else printerr "warning: VS Code FilePosition HTML fallback could not be installed";',
     "try (",
     "vscodeM2ExtensionOriginalCodeFunction = lookup(code, Function);",
     "code MethodFunction := f -> (",
     "m := methods f;",
     "if #m > 0 then code m else vscodeM2ExtensionOriginalCodeFunction f);",
     ') else printerr "warning: VS Code code fallback could not be installed";',
+    "try (",
+    "vscodeM2ExtensionOriginalCodeMethodFunctionWithOptions = lookup(code, MethodFunctionWithOptions);",
+    "code MethodFunctionWithOptions := f -> (",
+    "m := methods f;",
+    "if #m > 0 then code m else vscodeM2ExtensionOriginalCodeMethodFunctionWithOptions f);",
+    ') else printerr "warning: VS Code code MethodFunctionWithOptions fallback could not be installed";',
     'try (local lit; lit = value (Core#"private dictionary")#"texMathLiteral"; texMath Type := x -> "\\\\texttt{" | lit toString x | "}") else printerr "warning: VS Code texMath Type fallback could not be installed";',
     'try (local lit; lit = value (Core#"private dictionary")#"texMathLiteral"; texMath Ring := x -> if x.?texMath then x.texMath else "\\\\texttt{" | lit toString x | "}") else printerr "warning: VS Code texMath Ring fallback could not be installed";',
     "try (",

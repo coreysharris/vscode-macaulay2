@@ -16,7 +16,7 @@ import {
   normalizeM2LaunchArgs,
   windowsPathToWslPath,
 } from "../executablePath";
-import { getM2WebviewProcessArgs } from "../repl";
+import { getM2StartupPatch, getM2WebviewProcessArgs } from "../repl";
 
 // You can import and use all API from the 'vscode' module
 // as well as import your extension to test it
@@ -82,6 +82,17 @@ suite("Executable Switcher", function () {
 });
 
 suite("Executable Launch", function () {
+  test("patches method function code output for WebApp mode", function () {
+    const patch = getM2StartupPatch();
+
+    assert.notEqual(patch.indexOf("html FilePosition := p ->"), -1);
+    assert.notEqual(
+      patch.indexOf("code MethodFunctionWithOptions := f ->"),
+      -1,
+    );
+    assert.notEqual(patch.indexOf("if #m > 0 then code m"), -1);
+  });
+
   test("builds webview process args from the configured top-level mode", function () {
     assert.deepEqual(getM2WebviewProcessArgs("webview", "startupPatch"), [
       "--webapp",
