@@ -3,7 +3,11 @@ import * as fs from "fs";
 import * as path from "path";
 
 import { spawn, ChildProcess } from "child_process";
-import { resolveM2Executable } from "./executablePath";
+import {
+  getM2ExecutableResolutionDetail,
+  getM2LaunchConfiguration,
+  resolveM2Executable,
+} from "./executablePath";
 import { registerM2ExecutableSwitcher } from "./executableSwitcher";
 
 let g_context: vscode.ExtensionContext | undefined;
@@ -127,7 +131,7 @@ function getM2ExecutableResolution() {
     const action = "Open Settings";
     vscode.window
       .showErrorMessage(
-        "Could not locate the Macaulay2 executable automatically. Install Macaulay2 so the M2 command is available, or set 'macaulay2.executablePath' manually.",
+        "Could not locate the Macaulay2 executable automatically. Install Macaulay2 so the M2 command is available natively or in WSL, or set 'macaulay2.executablePath' manually.",
         action,
       )
       .then((selectedAction) => {
@@ -142,7 +146,9 @@ function getM2ExecutableResolution() {
   }
 
   console.log(
-    `Using M2 executable from ${resolution.source}: ${resolution.executablePath}`,
+    `Using M2 executable from ${resolution.source}: ${getM2ExecutableResolutionDetail(
+      resolution,
+    )}`,
   );
   return resolution;
 }
@@ -189,15 +195,19 @@ function startM2() {
   if (!resolution) {
     return;
   }
-  const exepath = resolution.executablePath;
   const workingDir = getM2WorkingDir();
+  const launch = getM2LaunchConfiguration(
+    resolution,
+    ["--webapp", "-e", getM2StartupExpression()],
+    workingDir,
+  );
 
   // Spawn M2 directly (no shell) so signals like SIGINT reach the M2 process.
   // Previously we used a shell with `2>&1` which merged stderr/stdout but prevented
   // SIGINT from interrupting the actual M2 process. Listening to both stdout and
   // stderr separately preserves output while allowing interrupts to work.
-  const child = spawn(exepath, ["--webapp", "-e", getM2StartupExpression()], {
-    cwd: workingDir,
+  const child = spawn(launch.executablePath, launch.args, {
+    cwd: launch.cwd,
   });
   proc = child;
   console.log("M2 process started (pid=", child.pid, ")");
@@ -323,10 +333,12 @@ function startM2Terminal(preserveFocus: boolean): vscode.Terminal | undefined {
   }
 
   const workingDir = getM2WorkingDir();
+  const launch = getM2LaunchConfiguration(resolution, [], workingDir);
   g_terminal = vscode.window.createTerminal({
     name: "Macaulay2",
-    shellPath: resolution.executablePath,
-    cwd: workingDir,
+    shellPath: launch.executablePath,
+    shellArgs: launch.args,
+    cwd: launch.cwd,
   });
   g_terminal.show(preserveFocus);
   return g_terminal;

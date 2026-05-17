@@ -9,7 +9,7 @@ This extension adds language support for [Macaulay2](https://macaulay2.com/) to 
 - Language configuration for comments, brackets, quotes, and surrounding pairs.
 - An integrated Macaulay2 REPL in a VS Code webview.
 - Optional terminal-backed evaluation in a standard VS Code terminal.
-- Automatic `M2` executable detection on macOS and Windows, with a manual override when needed.
+- Automatic `M2` executable detection on macOS and Windows, including WSL installs on Windows, with a manual override when needed.
 
 ![Syntax highlighting](https://user-images.githubusercontent.com/186528/54696704-990e3480-4b2c-11e9-9376-3106aa64d618.png)
 
@@ -22,7 +22,7 @@ Use `F12` or run **Macaulay2: Start M2 REPL** from the Command Palette to start 
 - Optional executable switcher. Set `macaulay2.showExecutableSwitcher` to `true` and add paths to `macaulay2.executablePathAlternatives` to show a status bar button for switching between M2 binaries.
 
 ## Requirements
-If the extension cannot find Macaulay2, set `macaulay2.executablePath` to the full path of your `M2` executable.
+If the extension cannot find Macaulay2, set `macaulay2.executablePath` to the full path of your `M2` executable. On Windows, leaving this empty also checks WSL for `M2`; a WSL path such as `/usr/bin/M2` can be used as the manual path when needed.
 
 ## Commands
 

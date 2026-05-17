@@ -11,6 +11,10 @@ import {
   getM2ExecutablePathOptions,
   getM2ExecutableStatusText,
 } from "../executableSwitcher";
+import {
+  getM2LaunchConfiguration,
+  windowsPathToWslPath,
+} from "../executablePath";
 
 // You can import and use all API from the 'vscode' module
 // as well as import your extension to test it
@@ -49,6 +53,80 @@ suite("Executable Switcher", function () {
     assert.equal(
       getM2ExecutableStatusText(undefined, undefined),
       "$(terminal) M2: not found",
+    );
+  });
+
+  test("shows WSL auto-detection compactly", function () {
+    assert.equal(
+      getM2ExecutableStatusText(undefined, {
+        executablePath: "C:\\Windows\\System32\\wsl.exe",
+        source: "WSL",
+        wslExecutablePath: "/usr/bin/M2",
+      }),
+      "$(terminal) M2 auto: WSL:/usr/bin/M2",
+    );
+  });
+
+  test("shows WSL manual executable compactly", function () {
+    assert.equal(
+      getM2ExecutableStatusText("/usr/bin/M2", {
+        executablePath: "C:\\Windows\\System32\\wsl.exe",
+        source: "setting via WSL",
+        wslExecutablePath: "/usr/bin/M2",
+      }),
+      "$(terminal) M2: WSL:/usr/bin/M2",
+    );
+  });
+});
+
+suite("Executable Launch", function () {
+  test("converts Windows drive paths to WSL mount paths", function () {
+    assert.equal(
+      windowsPathToWslPath("C:\\Users\\Admin\\m2-project"),
+      "/mnt/c/Users/Admin/m2-project",
+    );
+    assert.equal(
+      windowsPathToWslPath("D:/Macaulay2 Work"),
+      "/mnt/d/Macaulay2 Work",
+    );
+  });
+
+  test("builds a native M2 launch configuration", function () {
+    assert.deepEqual(
+      getM2LaunchConfiguration(
+        { executablePath: "/usr/local/bin/M2", source: "PATH" },
+        ["--webapp"],
+        "/Users/admin/project",
+      ),
+      {
+        executablePath: "/usr/local/bin/M2",
+        args: ["--webapp"],
+        cwd: "/Users/admin/project",
+      },
+    );
+  });
+
+  test("builds a WSL M2 launch configuration", function () {
+    assert.deepEqual(
+      getM2LaunchConfiguration(
+        {
+          executablePath: "C:\\Windows\\System32\\wsl.exe",
+          source: "WSL",
+          wslExecutablePath: "/usr/bin/M2",
+        },
+        ["--webapp"],
+        "C:\\Users\\Admin\\m2-project",
+      ),
+      {
+        executablePath: "C:\\Windows\\System32\\wsl.exe",
+        args: [
+          "--cd",
+          "/mnt/c/Users/Admin/m2-project",
+          "--exec",
+          "/usr/bin/M2",
+          "--webapp",
+        ],
+      },
     );
   });
 });

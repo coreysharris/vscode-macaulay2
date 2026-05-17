@@ -6,6 +6,13 @@ import { execFileSync } from "child_process";
 export interface M2ExecutableResolution {
   executablePath: string;
   source: string;
+  wslExecutablePath?: string;
+}
+
+export interface M2LaunchConfiguration {
+  executablePath: string;
+  args: string[];
+  cwd?: string;
 }
 
 export function resolveM2Executable(
@@ -13,6 +20,11 @@ export function resolveM2Executable(
 ): M2ExecutableResolution | undefined {
   const manualPath = normalizeConfiguredPath(configuredPath);
   if (manualPath) {
+    const manualWslResolution = resolveManualWslExecutable(manualPath);
+    if (manualWslResolution) {
+      return manualWslResolution;
+    }
+
     return { executablePath: manualPath, source: "setting" };
   }
 
@@ -38,6 +50,11 @@ export function resolveM2Executable(
       };
     }
 
+    const fromWsl = resolveWithWsl();
+    if (fromWsl) {
+      return fromWsl;
+    }
+
     return undefined;
   }
 
@@ -60,9 +77,75 @@ export function resolveM2Executable(
   return undefined;
 }
 
+export function getM2LaunchConfiguration(
+  resolution: M2ExecutableResolution,
+  args: string[],
+  workingDir: string,
+): M2LaunchConfiguration {
+  if (resolution.wslExecutablePath) {
+    return {
+      executablePath: resolution.executablePath,
+      args: [
+        "--cd",
+        windowsPathToWslPath(workingDir) || "~",
+        "--exec",
+        resolution.wslExecutablePath,
+        ...args,
+      ],
+    };
+  }
+
+  return {
+    executablePath: resolution.executablePath,
+    args,
+    cwd: workingDir,
+  };
+}
+
+export function getM2ExecutableResolutionDetail(
+  resolution: M2ExecutableResolution,
+): string {
+  if (resolution.wslExecutablePath) {
+    return `${resolution.executablePath} --exec ${resolution.wslExecutablePath}`;
+  }
+
+  return resolution.executablePath;
+}
+
+export function windowsPathToWslPath(filePath: string): string {
+  const normalizedPath = filePath.replace(/\\/g, "/");
+  const driveMatch = normalizedPath.match(/^([a-zA-Z]):\/?(.*)$/);
+  if (!driveMatch) {
+    return normalizedPath;
+  }
+
+  const [, drive, rest] = driveMatch;
+  const suffix = rest ? `/${rest.replace(/^\/+/, "")}` : "";
+  return `/mnt/${drive.toLowerCase()}${suffix}`;
+}
+
 function normalizeConfiguredPath(configuredPath?: string): string | undefined {
   const trimmed = configuredPath?.trim();
   return trimmed ? trimmed : undefined;
+}
+
+function resolveManualWslExecutable(
+  configuredPath: string,
+): M2ExecutableResolution | undefined {
+  if (process.platform !== "win32" || !isUnixAbsolutePath(configuredPath)) {
+    return undefined;
+  }
+
+  const wslPath = findWslExecutable();
+  if (!wslPath) {
+    return undefined;
+  }
+
+  return {
+    executablePath: wslPath,
+    source: "setting via WSL",
+    wslExecutablePath: configuredPath,
+  };
 }
 
 function resolveWithLoginShell(): string | undefined {
@@ -104,19 +187,60 @@ function resolveWithCygwinShell(): string | undefined {
   return undefined;
 }
 
+function resolveWithWsl(): M2ExecutableResolution | undefined {
+  const wslPath = findWslExecutable();
+  if (!wslPath) {
+    return undefined;
+  }
+
+  const resolved = runShellCommand(
+    wslPath,
+    ["--exec", "sh", "-lc", "command -v M2"],
+    5000,
+  );
+  const wslExecutablePath = normalizeShellOutputPath(resolved);
+  if (!wslExecutablePath || !isUnixAbsolutePath(wslExecutablePath)) {
+    return undefined;
+  }
+
+  return {
+    executablePath: wslPath,
+    source: "WSL",
+    wslExecutablePath,
+  };
+}
+
+function findWslExecutable(): string | undefined {
+  return firstExistingExecutable([
+    findCommandOnPath("wsl"),
+    getWindowsSystemExecutable("wsl.exe"),
+  ]);
+}
+
 function runShellCommand(
   shellPath: string,
   args: string[],
+  timeout?: number,
 ): string | undefined {
   try {
     const output = execFileSync(shellPath, args, {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"],
+      timeout,
     }).trim();
     return output || undefined;
   } catch {
     return undefined;
   }
+}
+
+function normalizeShellOutputPath(
+  output: string | undefined,
+): string | undefined {
+  return output
+    ?.split(/\r?\n/)
+    .map((line) => line.trim())
+    .find(Boolean);
 }
 
 function findCommandOnPath(command: string): string | undefined {
@@ -156,10 +280,7 @@ function getPathCandidates(command: string): string[] {
 
 function getUnixCandidates(): string[] {
   if (process.platform === "darwin") {
-    return [
-      "/opt/homebrew/bin/M2",
-      "/usr/local/bin/M2",
-    ];
+    return ["/opt/homebrew/bin/M2", "/usr/local/bin/M2"];
   }
 
   return [];
@@ -197,6 +318,14 @@ function getWindowsCandidateRoots(): string[] {
   return Array.from(roots);
 }
 
+function getWindowsSystemExecutable(
+  executableName: string,
+): string | undefined {
+  const systemRoot =
+    getEnv("SystemRoot") || path.join(getEnv("SystemDrive") || "C:", "Windows");
+  return path.join(systemRoot, "System32", executableName);
+}
+
 function expandWindowsExecutableNames(command: string): string[] {
   if (process.platform !== "win32") {
     return [command];
@@ -209,7 +338,10 @@ function expandWindowsExecutableNames(command: string): string[] {
 
   const pathext = getEnv("PATHEXT");
   const extensions = pathext
-    ? pathext.split(";").map((value) => value.trim()).filter(Boolean)
+    ? pathext
+        .split(";")
+        .map((value) => value.trim())
+        .filter(Boolean)
     : [".COM", ".EXE", ".BAT", ".CMD"];
 
   const candidates = [command];
@@ -251,6 +383,10 @@ function isExecutableFile(candidate: string): boolean {
 
 function isPathLike(value: string): boolean {
   return path.isAbsolute(value) || /[\\/]/.test(value);
+}
+
+function isUnixAbsolutePath(value: string): boolean {
+  return value.startsWith("/") && !value.startsWith("//");
 }
 
 function getEnv(name: string): string | undefined {

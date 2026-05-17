@@ -1,7 +1,11 @@
 import * as path from "path";
 import * as vscode from "vscode";
 
-import { M2ExecutableResolution, resolveM2Executable } from "./executablePath";
+import {
+  getM2ExecutableResolutionDetail,
+  M2ExecutableResolution,
+  resolveM2Executable,
+} from "./executablePath";
 
 const CONFIG_SECTION = "macaulay2";
 const EXECUTABLE_PATH_SETTING = "executablePath";
@@ -131,7 +135,9 @@ function getM2ExecutableQuickPickItems(
       label: "$(search) Auto-detect M2",
       description: currentPath ? "" : "Current",
       detail: autoResolution
-        ? `Currently resolves to ${autoResolution.executablePath}`
+        ? `Currently resolves to ${getM2ExecutableResolutionDetail(
+            autoResolution,
+          )}`
         : "No M2 executable found automatically",
       executablePath: "",
       picked: !currentPath,
@@ -230,6 +236,12 @@ export function getM2ExecutableStatusText(
   configuredPath: string | undefined,
   resolution: M2ExecutableResolution | undefined,
 ): string {
+  if (resolution?.wslExecutablePath) {
+    return configuredPath
+      ? `$(terminal) M2: WSL:${resolution.wslExecutablePath}`
+      : `$(terminal) M2 auto: WSL:${resolution.wslExecutablePath}`;
+  }
+
   const executablePath = configuredPath || resolution?.executablePath;
   if (!executablePath) {
     return "$(terminal) M2: not found";
@@ -246,11 +258,19 @@ function getM2ExecutableStatusTooltip(
   resolution: M2ExecutableResolution | undefined,
 ): string {
   if (configuredPath) {
+    if (resolution?.wslExecutablePath) {
+      return `Macaulay2 executable from ${resolution.source}: ${getM2ExecutableResolutionDetail(
+        resolution,
+      )}`;
+    }
+
     return `Macaulay2 executable: ${configuredPath}`;
   }
 
   if (resolution) {
-    return `Macaulay2 executable auto-detected from ${resolution.source}: ${resolution.executablePath}`;
+    return `Macaulay2 executable auto-detected from ${
+      resolution.source
+    }: ${getM2ExecutableResolutionDetail(resolution)}`;
   }
 
   return "Macaulay2 executable was not found. Click to choose an executable.";
