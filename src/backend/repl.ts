@@ -540,6 +540,7 @@ function getWebviewContent(
   focusInputOnLoad = true,
 ) {
   const extensionUri = g_context!.extensionUri;
+  const nonce = getNonce();
   const htmlPath = vscode.Uri.joinPath(
     extensionUri,
     "media",
@@ -563,6 +564,11 @@ function getWebviewContent(
     vscode.Uri.joinPath(extensionUri, "media", "minimal.css"),
   );
   html = html.replace("${cssUri}", cssUri.toString());
+  html = html.replace(/\$\{nonce\}/g, nonce);
+  html = html.replace(
+    "${cspMeta}",
+    getWebviewCspMeta(webview, nonce),
+  );
   const completionItemsJson = JSON.stringify(completionItems).replace(
     /</g,
     "\\u003c",
@@ -576,9 +582,35 @@ function getWebviewContent(
   const topLevelModeJson = JSON.stringify(getWebviewTopLevelMode());
   html = html.replace(
     "</head>",
-    `<script>window.macaulay2CompletionItems = ${completionItemsJson}; window.macaulay2Syntax = ${syntaxJson}; window.macaulay2ColorTheme = ${colorThemeJson}; window.macaulay2FocusInputOnLoad = ${focusInputOnLoadJson}; window.macaulay2TopLevelMode = ${topLevelModeJson};</script>\n  </head>`,
+    `<script nonce="${nonce}">window.macaulay2CompletionItems = ${completionItemsJson}; window.macaulay2Syntax = ${syntaxJson}; window.macaulay2ColorTheme = ${colorThemeJson}; window.macaulay2FocusInputOnLoad = ${focusInputOnLoadJson}; window.macaulay2TopLevelMode = ${topLevelModeJson};</script>\n  </head>`,
   );
   return html;
+}
+
+function getNonce(): string {
+  const possible =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  let nonce = "";
+  for (let i = 0; i < 32; i++) {
+    nonce += possible.charAt(Math.floor(Math.random() * possible.length));
+  }
+  return nonce;
+}
+
+function getWebviewCspMeta(webview: vscode.Webview, nonce: string): string {
+  const csp = [
+    "default-src 'none'",
+    "base-uri 'none'",
+    "form-action 'none'",
+    `img-src ${webview.cspSource} https: data:`,
+    `font-src ${webview.cspSource} https://cdn.jsdelivr.net data:`,
+    `style-src ${webview.cspSource} https://cdn.jsdelivr.net 'unsafe-inline'`,
+    `script-src ${webview.cspSource} https://cdn.jsdelivr.net 'nonce-${nonce}'`,
+  ].join("; ");
+
+  return `<meta http-equiv="Content-Security-Policy" content="${escapeHtmlAttribute(
+    csp,
+  )}">`;
 }
 
 function getHtmlTitle(html: string, fallback: string): string {
@@ -1028,11 +1060,31 @@ function interruptM2() {
   }
 }
 
+function getWebviewMessageString(
+  message: { data?: unknown },
+  maxLength = 1024 * 1024,
+): string | undefined {
+  if (typeof message.data !== "string") {
+    return undefined;
+  }
+  if (message.data.length > maxLength || message.data.includes("\0")) {
+    return undefined;
+  }
+  return message.data;
+}
+
 function handleWebviewMessage(message: any) {
+  if (!message || typeof message.type !== "string") {
+    return;
+  }
+
   switch (message.type) {
-    case "input":
-      executeCode(message.data);
+    case "input": {
+      const input = getWebviewMessageString(message);
+      if (input === undefined) break;
+      executeCode(input);
       break;
+    }
     case "reset":
       console.log("reset");
       if (proc) proc.kill();
@@ -1043,6 +1095,9 @@ function handleWebviewMessage(message: any) {
       interruptM2();
       break;
     case "paste":
+      if (!g_panel?.active) {
+        break;
+      }
       vscode.env.clipboard.readText().then(
         (text) => {
           if (g_panel)
@@ -1051,10 +1106,18 @@ function handleWebviewMessage(message: any) {
         (err) => console.error("Failed to read clipboard:", err),
       );
       break;
-    case "open":
-      console.log("open " + message.data);
+    case "open": {
+      const target = getWebviewMessageString(message, 8192);
+      if (target === undefined) break;
+      if (!procWorkingDir) {
+        vscode.window.showErrorMessage(
+          "Cannot open Macaulay2 output link because the REPL working directory is unknown.",
+        );
+        break;
+      }
+      console.log("open " + target);
       // fix relative path: relative to where M2 was started
-      const { path: relPath, start, end } = parseVSCodeFragment(message.data);
+      const { path: relPath, start, end } = parseVSCodeFragment(target);
       let selection;
       if (start && end) {
         selection = new vscode.Range(
@@ -1079,10 +1142,14 @@ function handleWebviewMessage(message: any) {
         viewColumn: vscode.ViewColumn.One,
       });
       break;
-    case "openHelp":
-      console.log("open help " + message.data);
-      openHelpUrl(message.data).catch(reportHelpOpenError);
+    }
+    case "openHelp": {
+      const target = getWebviewMessageString(message, 8192);
+      if (target === undefined) break;
+      console.log("open help " + target);
+      openHelpUrl(target).catch(reportHelpOpenError);
       break;
+    }
     case "focus":
       if (!shouldRestoreEditorFocusAfterWebviewOutput) {
         break;

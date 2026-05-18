@@ -59,6 +59,35 @@ window.gfxMouseDown = function (event) {
     gfxMouseDown1.call(el,event);
 }
 
+window.gfxInitializeMacaulay2Graphics = function(container) {
+    container = container || document;
+    var svgs = [];
+    if (container.matches && container.matches("svg.M2Svg")) svgs.push(container);
+    if (container.querySelectorAll)
+	svgs = svgs.concat(Array.from(container.querySelectorAll("svg.M2Svg")));
+    svgs.forEach(function(svg) {
+	if (svg.dataset.gfxListenersAttached) return;
+	svg.dataset.gfxListenersAttached = "true";
+	svg.addEventListener("mousedown", window.gfxMouseDown);
+    });
+
+    var autoControls = [];
+    if (container.matches && container.matches(".gfxauto")) autoControls.push(container);
+    if (container.querySelectorAll)
+	autoControls = autoControls.concat(Array.from(container.querySelectorAll(".gfxauto")));
+    autoControls.forEach(function(control) {
+	if (control.dataset.gfxAutoListenerAttached) return;
+	control.dataset.gfxAutoListenerAttached = "true";
+	control.addEventListener("click", function(event) {
+	    window.gfxToggleRotation(event);
+	});
+    });
+}
+
+window.addEventListener("DOMContentLoaded", function() {
+    window.gfxInitializeMacaulay2Graphics(document);
+});
+
 function gfxMouseDown1(event) {
     var el=event.target; // determine if we're dragging
     while (el && el.tagName!="svg" && !el.classList.contains("M2SvgDraggable")) el=el.parentElement;
@@ -412,8 +441,8 @@ function gfxReorder(el) {
 }
 
 function gNode(nd,vec) {
-    if (nd instanceof HTMLCollection) { // we're in trouble -- id used multiple times
-	i=0;
+    if (nd instanceof HTMLCollection || nd instanceof NodeList || nd instanceof Array) { // we're in trouble -- id used multiple times
+	var i=0;
 	while (i<nd.length && !currentEl.contains(nd[i])) i++;
 	if (i<nd.length) nd=nd[i]; else return; // shouldn't happen
     }
@@ -500,13 +529,220 @@ function gProject(nd1,nd2,nd3) {
     }
 }
 
+var gfxDataFunctions = {
+    vector: vector,
+    matrix: matrix,
+    times: times,
+    gNode: gNode,
+    gTimes: gTimes,
+    gPlus: gPlus,
+    gPlace: gPlace,
+    gInter: gInter,
+    gBisect: gBisect,
+    gProject: gProject
+};
+
+function gfxResolveIdentifier(name) {
+    if (name === "true") return true;
+    if (name === "false") return false;
+    if (name === "null") return null;
+    if (name === "undefined") return undefined;
+    if (name === "Infinity") return Infinity;
+    if (name === "NaN") return NaN;
+
+    var root = currentEl ? currentEl.ownerDocument : document;
+    var matches = Array.from(root.querySelectorAll("[id]")).filter(function(el) {
+	return el.id === name;
+    });
+    if (matches.length === 1) return matches[0];
+    if (matches.length > 1) return matches;
+    throw new Error("Unknown VectorGraphics identifier: " + name);
+}
+
+class GfxDataParser {
+    constructor(input) {
+	this.input = String(input);
+	this.index = 0;
+    }
+
+    parse() {
+	var value = this.parseValue();
+	this.skipWhitespace();
+	if (this.index !== this.input.length)
+	    throw new Error("Unexpected VectorGraphics data at offset " + this.index);
+	return value;
+    }
+
+    parseValue() {
+	this.skipWhitespace();
+	var ch = this.peek();
+	if (ch === "[" ) return this.parseArray();
+	if (ch === "{" ) return this.parseObject();
+	if (ch === "\"" || ch === "'") return this.parseString();
+	if (/[+\-.0-9]/.test(ch || "")) return this.parseNumber();
+	return this.parseIdentifierOrCall();
+    }
+
+    parseArray() {
+	var result = [];
+	this.expect("[");
+	this.skipWhitespace();
+	if (this.peek() === "]") {
+	    this.index++;
+	    return result;
+	}
+	while (this.index < this.input.length) {
+	    result.push(this.parseValue());
+	    this.skipWhitespace();
+	    if (this.peek() === "]") {
+		this.index++;
+		return result;
+	    }
+	    this.expect(",");
+	    this.skipWhitespace();
+	    if (this.peek() === "]") {
+		this.index++;
+		return result;
+	    }
+	}
+	throw new Error("Unterminated VectorGraphics array");
+    }
+
+    parseObject() {
+	var result = {};
+	this.expect("{");
+	this.skipWhitespace();
+	if (this.peek() === "}") {
+	    this.index++;
+	    return result;
+	}
+	while (this.index < this.input.length) {
+	    var key = this.peek() === "\"" || this.peek() === "'"
+		? this.parseString()
+		: this.parseIdentifierName();
+	    this.skipWhitespace();
+	    this.expect(":");
+	    result[key] = this.parseValue();
+	    this.skipWhitespace();
+	    if (this.peek() === "}") {
+		this.index++;
+		return result;
+	    }
+	    this.expect(",");
+	    this.skipWhitespace();
+	    if (this.peek() === "}") {
+		this.index++;
+		return result;
+	    }
+	}
+	throw new Error("Unterminated VectorGraphics object");
+    }
+
+    parseString() {
+	var quote = this.input[this.index++];
+	var result = "";
+	while (this.index < this.input.length) {
+	    var ch = this.input[this.index++];
+	    if (ch === quote) return result;
+	    if (ch !== "\\") {
+		result += ch;
+		continue;
+	    }
+	    var escaped = this.input[this.index++];
+	    switch (escaped) {
+	    case "b": result += "\b"; break;
+	    case "f": result += "\f"; break;
+	    case "n": result += "\n"; break;
+	    case "r": result += "\r"; break;
+	    case "t": result += "\t"; break;
+	    case "u":
+		var code = this.input.substring(this.index, this.index + 4);
+		if (!/^[0-9a-fA-F]{4}$/.test(code))
+		    throw new Error("Invalid VectorGraphics unicode escape");
+		result += String.fromCharCode(parseInt(code, 16));
+		this.index += 4;
+		break;
+	    default:
+		result += escaped;
+	    }
+	}
+	throw new Error("Unterminated VectorGraphics string");
+    }
+
+    parseNumber() {
+	var match = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?/.exec(
+	    this.input.substring(this.index),
+	);
+	if (!match) throw new Error("Invalid VectorGraphics number at offset " + this.index);
+	this.index += match[0].length;
+	return Number(match[0]);
+    }
+
+    parseIdentifierOrCall() {
+	var name = this.parseIdentifierName();
+	this.skipWhitespace();
+	if (this.peek() !== "(") return gfxResolveIdentifier(name);
+	this.index++;
+	var args = [];
+	this.skipWhitespace();
+	if (this.peek() === ")") {
+	    this.index++;
+	} else {
+	    while (this.index < this.input.length) {
+		args.push(this.parseValue());
+		this.skipWhitespace();
+		if (this.peek() === ")") {
+		    this.index++;
+		    break;
+		}
+		this.expect(",");
+	    }
+	}
+	var fn = gfxDataFunctions[name];
+	if (typeof fn !== "function")
+	    throw new Error("Unsupported VectorGraphics function: " + name);
+	return fn.apply(null, args);
+    }
+
+    parseIdentifierName() {
+	var match = /^[A-Za-z_$][A-Za-z0-9_$]*/.exec(this.input.substring(this.index));
+	if (!match)
+	    throw new Error("Expected VectorGraphics identifier at offset " + this.index);
+	this.index += match[0].length;
+	return match[0];
+    }
+
+    skipWhitespace() {
+	while (/\s/.test(this.peek() || "")) this.index++;
+    }
+
+    expect(ch) {
+	this.skipWhitespace();
+	if (this.input[this.index] !== ch)
+	    throw new Error("Expected '" + ch + "' in VectorGraphics data at offset " + this.index);
+	this.index++;
+    }
+
+    peek() {
+	return this.input[this.index];
+    }
+}
+
+function parseGfxDataValue(value) {
+    return new GfxDataParser(value).parse();
+}
+
 function gfxCheckData(el,mat) { // mat is the future pmatrix*cmatrix
     if (el.namespaceURI!="http://www.w3.org/2000/svg") return;
     if (el.classList.contains("gfxauto")) return;
     // TODO should probably eliminate other things e.g. <title>
     el.gfxdata={};
     for (var v in el.dataset)
-	el.gfxdata[v]=eval("("+el.dataset[v]+")");
+	try {
+	    el.gfxdata[v]=parseGfxDataValue(el.dataset[v]);
+	} catch (err) {
+	    console.warn("Ignoring invalid VectorGraphics data attribute", v, err);
+	}
     // start the computation of matrices... (see gfxRecompute() for details)
     if (el.tagName=="svg") {
 	if (!el.gfxdata.pmatrix) el.gfxdata.pmatrix=matrix([[1,0,0,0],[0,-1,0,0],[0,0,-1,0],[0,0,-1/1000,1]]);

@@ -258,6 +258,79 @@ const Shell = function (
   const normalizePlainText = function (txt: string) {
     return txt.replace(/\t/g, "    ");
   };
+  const blockedHtmlElementNames = new Set([
+    "base",
+    "embed",
+    "iframe",
+    "link",
+    "meta",
+    "object",
+    "script",
+  ]);
+  const urlAttributeNames = new Set([
+    "action",
+    "formaction",
+    "href",
+    "poster",
+    "src",
+    "xlink:href",
+  ]);
+  const isDangerousUrl = function (value: string) {
+    const normalized = value
+      .trim()
+      .replace(/[\u0000-\u001f\u007f\s]+/g, "")
+      .toLowerCase();
+    if (
+      normalized.startsWith("javascript:") ||
+      normalized.startsWith("vbscript:")
+    )
+      return true;
+    return (
+      normalized.startsWith("data:") &&
+      !/^data:image\/(?:gif|jpe?g|png|svg\+xml|webp);/i.test(normalized)
+    );
+  };
+  const sanitizeHtmlElement = function (el: Element) {
+    Array.from(el.attributes).forEach((attr) => {
+      const attrName = attr.name.toLowerCase();
+      if (attrName.startsWith("on") || attrName == "srcdoc") {
+        el.removeAttribute(attr.name);
+        return;
+      }
+      if (urlAttributeNames.has(attrName) && isDangerousUrl(attr.value)) {
+        el.removeAttribute(attr.name);
+        return;
+      }
+      if (
+        attrName == "style" &&
+        /(?:expression\s*\(|url\s*\(\s*['"]?\s*(?:javascript|vbscript):)/i.test(
+          attr.value,
+        )
+      ) {
+        el.removeAttribute(attr.name);
+      }
+    });
+  };
+  const sanitizeHtmlTree = function (root: ParentNode) {
+    Array.from(root.children).forEach((el) => {
+      if (blockedHtmlElementNames.has(el.tagName.toLowerCase())) {
+        el.remove();
+        return;
+      }
+      sanitizeHtmlElement(el);
+      sanitizeHtmlTree(el);
+    });
+  };
+  const sanitizedHtmlFragment = function (html: string) {
+    const template = document.createElement("template");
+    template.innerHTML = html;
+    sanitizeHtmlTree(template.content);
+    return template.content;
+  };
+  const initializeVectorGraphics = function (container: HTMLElement) {
+    const initializer = (window as any).gfxInitializeMacaulay2Graphics;
+    if (typeof initializer == "function") initializer(container);
+  };
   const inputSwitchesToStandardMode = function (txt: string) {
     return /(?:^|[;\n])\s*topLevelMode\s*=\s*Standard\s*(?:;|$)/.test(txt);
   };
@@ -1116,19 +1189,21 @@ const Shell = function (
       if (anc.classList.contains("M2Input")) {
         anc.parentElement.insertBefore(htmlSec, anc);
       }
-      htmlSec.insertAdjacentHTML("beforeend", htmlSec.dataset.code);
+      htmlSec.appendChild(sanitizedHtmlFragment(htmlSec.dataset.code || ""));
       // KaTeX rendering // TODO reinstate bundled version
       // autoRender(htmlSec);
       // instead we use the non-bundled katex
-      // @ts-ignore
-      renderMathInElement(htmlSec, {
-        strict: false,
-        trust: true,
-        // Dense Macaulay2 output can contain thousands of thin-space macros.
-        maxExpand: 100000,
-        delimiters: [{ left: "$", right: "$", display: false }],
-      });
+      const renderMath = (window as any).renderMathInElement;
+      if (typeof renderMath == "function")
+        renderMath(htmlSec, {
+          strict: false,
+          trust: true,
+          // Dense Macaulay2 output can contain thousands of thin-space macros.
+          maxExpand: 100000,
+          delimiters: [{ left: "$", right: "$", display: false }],
+        });
       if (colorizationEnabled()) highlightMacaulay2CodeElements(htmlSec);
+      initializeVectorGraphics(htmlSec);
       // syntax highlighting code
       /*
       Array.from(

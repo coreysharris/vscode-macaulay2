@@ -2,6 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8">
+    ${cspMeta}
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Macaulay2 Output</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.13.11/dist/katex.min.css">
@@ -321,8 +322,8 @@
         color: var(--m2-token-class);
       }
     </style>
-    <script type="module" src="${scriptUri}"></script>
-    <script type="module" src="${VGUri}"></script>
+    <script type="module" nonce="${nonce}" src="${scriptUri}"></script>
+    <script type="module" nonce="${nonce}" src="${VGUri}"></script>
   </head>
   <body>
     <div id="terminal" class="M2Text">
