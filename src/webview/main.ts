@@ -3,6 +3,10 @@ import { Shell } from "./shellEmulator.js";
 declare global {
   interface Window {
     macaulay2CompletionItems?: { label: string; kind: string }[];
+    macaulay2Syntax?: {
+      tokens?: { label: string; className: string; priority: number }[];
+      patterns?: { source: string; className: string }[];
+    };
     macaulay2ColorTheme?: string;
     macaulay2FocusInputOnLoad?: boolean;
     macaulay2TopLevelMode?: "webapp" | "standard";
@@ -58,6 +62,7 @@ const myshell = new Shell(
   null,
   true,
   window.macaulay2CompletionItems || [],
+  window.macaulay2Syntax || {},
   window.macaulay2FocusInputOnLoad !== false,
   window.macaulay2TopLevelMode === "standard" ? "standard" : "webapp",
 );

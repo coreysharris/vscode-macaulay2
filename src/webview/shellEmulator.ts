@@ -60,6 +60,22 @@ type CompletionItem = {
   kind: string;
 };
 
+type SyntaxToken = {
+  label: string;
+  className: string;
+  priority: number;
+};
+
+type SyntaxPattern = {
+  source: string;
+  className: string;
+};
+
+type SyntaxConfig = {
+  tokens?: SyntaxToken[];
+  patterns?: SyntaxPattern[];
+};
+
 const Shell = function (
   terminal: HTMLElement,
   emit: (type: string, msg?: string) => void, // should be renamed
@@ -67,6 +83,7 @@ const Shell = function (
   iFrame: HTMLFrameElement,
   createInputSpan: boolean,
   completionItems: CompletionItem[] = [],
+  syntax: SyntaxConfig = {},
   focusInputOnLoad = true,
   initialOutputMode: "webapp" | "standard" = "webapp",
 ) {
@@ -288,6 +305,177 @@ const Shell = function (
     seenCompletionLabels.add(item.label);
     return true;
   });
+  const macaulay2TokenClasses = new Map<
+    string,
+    { className: string; priority: number }
+  >();
+  const macaulay2TokenClass = function (kind: string) {
+    switch (kind) {
+      case "Class":
+        return { className: "class-name", priority: 3 };
+      case "Function":
+        return { className: "function", priority: 2 };
+      case "Constant":
+        return { className: "constant", priority: 1 };
+      case "Keyword":
+        return { className: "keyword", priority: 4 };
+      default:
+        return null;
+    }
+  };
+
+  if (syntax.tokens && syntax.tokens.length > 0) {
+    syntax.tokens.forEach((token) => {
+      const current = macaulay2TokenClasses.get(token.label);
+      if (!current || token.priority > current.priority) {
+        macaulay2TokenClasses.set(token.label, {
+          className: token.className,
+          priority: token.priority,
+        });
+      }
+    });
+  } else {
+    completionItems.forEach((item) => {
+      const tokenClass = macaulay2TokenClass(item.kind);
+      const current = macaulay2TokenClasses.get(item.label);
+      if (tokenClass && (!current || tokenClass.priority > current.priority))
+        macaulay2TokenClasses.set(item.label, tokenClass);
+    });
+  }
+
+  const macaulay2TokenPatterns = (syntax.patterns || [])
+    .map((pattern) => {
+      try {
+        return {
+          className: pattern.className,
+          regex: new RegExp("^(?:" + pattern.source + ")"),
+        };
+      } catch (err) {
+        console.warn("Could not compile Macaulay2 token pattern", pattern, err);
+        return null;
+      }
+    })
+    .filter((pattern) => pattern !== null) as {
+    className: string;
+    regex: RegExp;
+  }[];
+
+  const macaulay2WordPattern = /^[A-Za-z_]\w*/;
+
+  const appendMacaulay2Token = function (
+    fragment: DocumentFragment,
+    text: string,
+    tokenClass?: string,
+  ) {
+    if (text.length == 0) return;
+    if (!tokenClass) {
+      fragment.appendChild(document.createTextNode(text));
+      return;
+    }
+
+    const span = document.createElement("span");
+    span.className = "token " + tokenClass;
+    span.textContent = text;
+    fragment.appendChild(span);
+  };
+
+  const highlightedMacaulay2Text = function (text: string) {
+    const fragment = document.createDocumentFragment();
+    let i = 0;
+    let plainStart = 0;
+
+    const appendToken = function (end: number, tokenClass: string) {
+      appendMacaulay2Token(fragment, text.substring(plainStart, i));
+      appendMacaulay2Token(fragment, text.substring(i, end), tokenClass);
+      i = end;
+      plainStart = i;
+    };
+
+    while (i < text.length) {
+      if (text.startsWith("///", i)) {
+        const close = text.indexOf("///", i + 3);
+        appendToken(close < 0 ? text.length : close + 3, "string");
+      } else if (text.startsWith("--", i)) {
+        const close = text.indexOf("\n", i + 2);
+        appendToken(close < 0 ? text.length : close, "comment");
+      } else if (text.startsWith("-*", i)) {
+        const close = text.indexOf("*-", i + 2);
+        appendToken(close < 0 ? text.length : close + 2, "comment");
+      } else if (text.startsWith("{*", i)) {
+        const close = text.indexOf("*}", i + 2);
+        appendToken(close < 0 ? text.length : close + 2, "comment");
+      } else if (text[i] == '"') {
+        let end = i + 1;
+        while (end < text.length) {
+          if (text[end] == "\\") {
+            end += 2;
+          } else if (text[end] == '"') {
+            end++;
+            break;
+          } else end++;
+        }
+        appendToken(end, "string");
+      } else {
+        const rest = text.substring(i);
+        const wordMatch = rest.match(macaulay2WordPattern);
+        const patternMatches = macaulay2TokenPatterns
+          .map((pattern) => {
+            const match = rest.match(pattern.regex);
+            return match && match[0].length > 0
+              ? { text: match[0], className: pattern.className }
+              : null;
+          })
+          .filter((match) => match !== null) as {
+          text: string;
+          className: string;
+        }[];
+        const patternMatch = patternMatches.sort(
+          (a, b) => b.text.length - a.text.length,
+        )[0];
+
+        if (wordMatch) {
+          const word = wordMatch[0];
+          const tokenClass = macaulay2TokenClasses.get(word);
+          if (tokenClass) appendToken(i + word.length, tokenClass.className);
+          else i += word.length;
+        } else if (patternMatch) {
+          appendToken(i + patternMatch.text.length, patternMatch.className);
+        } else if (
+          text.startsWith("->", i) ||
+          text.startsWith("=>", i) ||
+          text.startsWith("//", i)
+        )
+          appendToken(i + 2, "operator");
+        else if ("%*/-+\\".indexOf(text[i]) >= 0)
+          appendToken(i + 1, "operator");
+        else i++;
+      }
+    }
+
+    appendMacaulay2Token(fragment, text.substring(plainStart));
+    return fragment;
+  };
+
+  const highlightMacaulay2Element = function (el: HTMLElement) {
+    const text = el.textContent || "";
+    el.textContent = "";
+    el.appendChild(highlightedMacaulay2Text(text));
+  };
+
+  const highlightMacaulay2CodeElements = function (container: HTMLElement) {
+    Array.from(container.querySelectorAll("code") as NodeListOf<HTMLElement>)
+      .filter((code) => language(code) == "Macaulay2")
+      .forEach((code) => {
+        if (code.classList.contains("M2HighlightedCode")) return;
+        const codeText = code.dataset.m2code || code.textContent || "";
+        code.dataset.m2code = codeText;
+        highlightMacaulay2Element(code);
+        code.classList.add("M2HighlightedCode");
+      });
+  };
+  const colorizationEnabled = function () {
+    return outputMode !== "standard";
+  };
   let completionMenu: HTMLUListElement | null = null;
   let completionMatches: CompletionItem[] = [];
   let completionStart = 0;
@@ -922,6 +1110,7 @@ const Shell = function (
       );
        */
       htmlSec.classList.add("M2PastInput");
+      if (colorizationEnabled()) highlightMacaulay2Element(htmlSec);
     } else if (htmlSec.classList.contains("M2Html")) {
       // first things first: make sure we don't mess with input (interrupts, tasks, etc, can display unexpectedly)
       if (anc.classList.contains("M2Input")) {
@@ -939,6 +1128,7 @@ const Shell = function (
         maxExpand: 100000,
         delimiters: [{ left: "$", right: "$", display: false }],
       });
+      if (colorizationEnabled()) highlightMacaulay2CodeElements(htmlSec);
       // syntax highlighting code
       /*
       Array.from(
@@ -1195,7 +1385,8 @@ const Shell = function (
           previous &&
           previous.classList.contains(outputScrollClass) &&
           previous.classList.contains(standardOutputClass) ==
-            (outputMode === "standard")
+            (outputMode === "standard") &&
+          outputContainerOwnsNewline(previous)
         )
           return previous as HTMLElement;
         return htmlSec;
@@ -1204,6 +1395,15 @@ const Shell = function (
         htmlSec,
         inputSpan && inputSpan.parentElement == htmlSec ? inputSpan : null,
         outputMode === "standard",
+      );
+    };
+    const outputContainerOwnsNewline = function (previous: Element) {
+      return (
+        outputMode === "standard" ||
+        !(
+          previous.lastElementChild &&
+          previous.lastElementChild.classList.contains("M2Html")
+        )
       );
     };
     const target = displayTarget(msg);

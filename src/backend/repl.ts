@@ -28,6 +28,25 @@ type WebviewCompletionItem = {
 };
 type WebviewColorTheme = "classic" | "light" | "dark" | "vscode";
 type WebviewTopLevelMode = "webapp" | "standard";
+type WebviewSyntaxClass =
+  | "keyword"
+  | "operator"
+  | "function"
+  | "class-name"
+  | "constant";
+type WebviewSyntaxToken = {
+  label: string;
+  className: WebviewSyntaxClass;
+  priority: number;
+};
+type WebviewSyntaxPattern = {
+  source: string;
+  className: WebviewSyntaxClass;
+};
+type WebviewSyntax = {
+  tokens: WebviewSyntaxToken[];
+  patterns: WebviewSyntaxPattern[];
+};
 
 type HelpPanelState = {
   panel: vscode.WebviewPanel;
@@ -524,12 +543,16 @@ function getWebviewContent(
     /</g,
     "\\u003c",
   );
+  const syntaxJson = JSON.stringify(getWebviewSyntax(extensionUri)).replace(
+    /</g,
+    "\\u003c",
+  );
   const colorThemeJson = JSON.stringify(colorTheme);
   const focusInputOnLoadJson = JSON.stringify(focusInputOnLoad);
   const topLevelModeJson = JSON.stringify(getWebviewTopLevelMode());
   html = html.replace(
     "</head>",
-    `<script>window.macaulay2CompletionItems = ${completionItemsJson}; window.macaulay2ColorTheme = ${colorThemeJson}; window.macaulay2FocusInputOnLoad = ${focusInputOnLoadJson}; window.macaulay2TopLevelMode = ${topLevelModeJson};</script>\n  </head>`,
+    `<script>window.macaulay2CompletionItems = ${completionItemsJson}; window.macaulay2Syntax = ${syntaxJson}; window.macaulay2ColorTheme = ${colorThemeJson}; window.macaulay2FocusInputOnLoad = ${focusInputOnLoadJson}; window.macaulay2TopLevelMode = ${topLevelModeJson};</script>\n  </head>`,
   );
   return html;
 }
@@ -547,6 +570,87 @@ function getHtmlTitle(html: string, fallback: string): string {
       .replace(/&quot;/g, '"')
       .trim() || fallback
   );
+}
+
+function getWebviewSyntaxClass(
+  scopeName: string,
+): { className: WebviewSyntaxClass; priority: number } | undefined {
+  if (scopeName.startsWith("keyword.operator.")) {
+    return { className: "operator", priority: 5 };
+  }
+  if (scopeName.startsWith("keyword.")) {
+    return { className: "keyword", priority: 4 };
+  }
+  if (scopeName.startsWith("entity.name.type.")) {
+    return { className: "class-name", priority: 3 };
+  }
+  if (scopeName.startsWith("support.function.")) {
+    return { className: "function", priority: 2 };
+  }
+  if (scopeName.startsWith("constant.language.")) {
+    return { className: "constant", priority: 1 };
+  }
+}
+
+function extractWordsFromTextMateMatch(match: string): string[] | undefined {
+  const wordGroup = match.match(/\\b\(([^()]+)\)\\b$/);
+  if (!wordGroup) return undefined;
+
+  const words = wordGroup[1].split("|");
+  if (!words.every((word) => /^[A-Za-z_]\w*$/.test(word))) return undefined;
+  return words;
+}
+
+function getWebviewSyntax(extensionUri: vscode.Uri): WebviewSyntax {
+  try {
+    const grammarPath = vscode.Uri.joinPath(
+      extensionUri,
+      "syntaxes",
+      "macaulay2.tmLanguage.json",
+    ).fsPath;
+    const grammar = JSON.parse(fs.readFileSync(grammarPath, "utf8"));
+    const tokens: WebviewSyntaxToken[] = [];
+    const patterns: WebviewSyntaxPattern[] = [];
+    const patternGroups = [
+      grammar.repository?.keywords?.patterns,
+      grammar.repository?.support?.patterns,
+    ];
+
+    patternGroups.forEach((group) => {
+      if (!Array.isArray(group)) return;
+      group.forEach((pattern) => {
+        if (
+          typeof pattern?.name !== "string" ||
+          typeof pattern?.match !== "string"
+        )
+          return;
+
+        const tokenClass = getWebviewSyntaxClass(pattern.name);
+        if (!tokenClass) return;
+
+        const words = extractWordsFromTextMateMatch(pattern.match);
+        if (words) {
+          words.forEach((label) =>
+            tokens.push({
+              label,
+              className: tokenClass.className,
+              priority: tokenClass.priority,
+            }),
+          );
+        } else {
+          patterns.push({
+            source: pattern.match,
+            className: tokenClass.className,
+          });
+        }
+      });
+    });
+
+    return { tokens, patterns };
+  } catch (err) {
+    console.warn("Could not load Macaulay2 TextMate grammar for webview", err);
+    return { tokens: [], patterns: [] };
+  }
 }
 
 function escapeHtmlAttribute(value: string): string {
