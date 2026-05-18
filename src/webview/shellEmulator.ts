@@ -290,10 +290,25 @@ const Shell = function (
       !/^data:image\/(?:gif|jpe?g|png|svg\+xml|webp);/i.test(normalized)
     );
   };
+  const preserveTrustedVectorGraphicsHandler = function (
+    el: Element,
+    attrName: string,
+    attrValue: string,
+  ) {
+    if (el.tagName.toLowerCase() != "animate" || attrName != "onbegin") return;
+
+    const match = attrValue.match(
+      /^\s*gfxToggleRotation\s*\(\s*event\s*,\s*(true|false)\s*\)\s*;?\s*$/,
+    );
+    if (!match) return;
+
+    el.setAttribute("data-gfx-toggle-rotation-onbegin", match[1]);
+  };
   const sanitizeHtmlElement = function (el: Element) {
     Array.from(el.attributes).forEach((attr) => {
       const attrName = attr.name.toLowerCase();
       if (attrName.startsWith("on") || attrName == "srcdoc") {
+        preserveTrustedVectorGraphicsHandler(el, attrName, attr.value);
         el.removeAttribute(attr.name);
         return;
       }

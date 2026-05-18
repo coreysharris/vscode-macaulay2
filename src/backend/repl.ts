@@ -342,6 +342,12 @@ async function startREPLOnce(preserveFocus: boolean) {
           retainContextWhenHidden: true,
           localResourceRoots: [
             vscode.Uri.joinPath(g_context!.extensionUri, "media"),
+            vscode.Uri.joinPath(
+              g_context!.extensionUri,
+              "node_modules",
+              "katex",
+              "dist",
+            ),
           ],
         },
       );
@@ -564,6 +570,37 @@ function getWebviewContent(
     vscode.Uri.joinPath(extensionUri, "media", "minimal.css"),
   );
   html = html.replace("${cssUri}", cssUri.toString());
+  const katexCssUri = webview.asWebviewUri(
+    vscode.Uri.joinPath(
+      extensionUri,
+      "node_modules",
+      "katex",
+      "dist",
+      "katex.min.css",
+    ),
+  );
+  html = html.replace("${katexCssUri}", katexCssUri.toString());
+  const katexJsUri = webview.asWebviewUri(
+    vscode.Uri.joinPath(
+      extensionUri,
+      "node_modules",
+      "katex",
+      "dist",
+      "katex.min.js",
+    ),
+  );
+  html = html.replace("${katexJsUri}", katexJsUri.toString());
+  const katexAutoRenderUri = webview.asWebviewUri(
+    vscode.Uri.joinPath(
+      extensionUri,
+      "node_modules",
+      "katex",
+      "dist",
+      "contrib",
+      "auto-render.min.js",
+    ),
+  );
+  html = html.replace("${katexAutoRenderUri}", katexAutoRenderUri.toString());
   html = html.replace(/\$\{nonce\}/g, nonce);
   html = html.replace(
     "${cspMeta}",
@@ -603,9 +640,9 @@ function getWebviewCspMeta(webview: vscode.Webview, nonce: string): string {
     "base-uri 'none'",
     "form-action 'none'",
     `img-src ${webview.cspSource} https: data:`,
-    `font-src ${webview.cspSource} https://cdn.jsdelivr.net data:`,
-    `style-src ${webview.cspSource} https://cdn.jsdelivr.net 'unsafe-inline'`,
-    `script-src ${webview.cspSource} https://cdn.jsdelivr.net 'nonce-${nonce}'`,
+    `font-src ${webview.cspSource} data:`,
+    `style-src ${webview.cspSource} 'unsafe-inline'`,
+    `script-src ${webview.cspSource} 'nonce-${nonce}'`,
   ].join("; ");
 
   return `<meta http-equiv="Content-Security-Policy" content="${escapeHtmlAttribute(

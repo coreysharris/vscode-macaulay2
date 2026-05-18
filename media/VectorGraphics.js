@@ -15,9 +15,10 @@ function gfxInitData(el) {
 // auto-rotation button
 window.gfxToggleRotation = function(event,flag) {
     //    this.blur();
-    var el = event.currentTarget;
+    var el = gfxFindAutoControl(event.currentTarget || event.target);
+    if (!el) return;
     var svgel = el.ownerSVGElement;
-    while (!el.classList.contains("gfxauto")) el=el.parentElement;
+    if (!svgel) return;
     if (el.svgel) return; // shouldn't happen
     if (!svgel.gfxdata) gfxInitData(svgel);
     if (!el.ondblclick) el.ondblclick= function(event) { event.stopPropagation(); }; // weak
@@ -59,6 +60,31 @@ window.gfxMouseDown = function (event) {
     gfxMouseDown1.call(el,event);
 }
 
+function gfxFindAutoControl(el) {
+    while (el && (!el.classList || !el.classList.contains("gfxauto"))) el=el.parentElement;
+    return el;
+}
+
+function gfxSyntheticEvent(el) {
+    return {
+	currentTarget: el,
+	stopPropagation: function() {}
+    };
+}
+
+function gfxToggleRotationWhenReady(el,flag,tries) {
+    if (tries === undefined) tries = 20;
+    var svgel = el.ownerSVGElement;
+    if (svgel && document.body.contains(svgel)) {
+	window.gfxToggleRotation(gfxSyntheticEvent(el),flag);
+	return;
+    }
+    if (tries > 0)
+	setTimeout(function() {
+	    gfxToggleRotationWhenReady(el,flag,tries-1);
+	},25);
+}
+
 window.gfxInitializeMacaulay2Graphics = function(container) {
     container = container || document;
     var svgs = [];
@@ -81,6 +107,17 @@ window.gfxInitializeMacaulay2Graphics = function(container) {
 	control.addEventListener("click", function(event) {
 	    window.gfxToggleRotation(event);
 	});
+    });
+
+    var autoStarts = [];
+    if (container.matches && container.matches("animate[data-gfx-toggle-rotation-onbegin]")) autoStarts.push(container);
+    if (container.querySelectorAll)
+	autoStarts = autoStarts.concat(Array.from(container.querySelectorAll("animate[data-gfx-toggle-rotation-onbegin]")));
+    autoStarts.forEach(function(animation) {
+	var control = gfxFindAutoControl(animation);
+	if (!control || control.dataset.gfxAutoStartHandled) return;
+	control.dataset.gfxAutoStartHandled = "true";
+	gfxToggleRotationWhenReady(control,animation.dataset.gfxToggleRotationOnbegin === "true");
     });
 }
 
