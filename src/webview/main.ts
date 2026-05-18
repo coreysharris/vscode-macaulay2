@@ -5,6 +5,7 @@ declare global {
     macaulay2CompletionItems?: { label: string; kind: string }[];
     macaulay2ColorTheme?: string;
     macaulay2FocusInputOnLoad?: boolean;
+    macaulay2TopLevelMode?: "webapp" | "standard";
   }
 }
 
@@ -58,6 +59,7 @@ const myshell = new Shell(
   true,
   window.macaulay2CompletionItems || [],
   window.macaulay2FocusInputOnLoad !== false,
+  window.macaulay2TopLevelMode === "standard" ? "standard" : "webapp",
 );
 
 console.log("Shell created.");

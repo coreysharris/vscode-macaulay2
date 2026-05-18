@@ -526,9 +526,10 @@ function getWebviewContent(
   );
   const colorThemeJson = JSON.stringify(colorTheme);
   const focusInputOnLoadJson = JSON.stringify(focusInputOnLoad);
+  const topLevelModeJson = JSON.stringify(getWebviewTopLevelMode());
   html = html.replace(
     "</head>",
-    `<script>window.macaulay2CompletionItems = ${completionItemsJson}; window.macaulay2ColorTheme = ${colorThemeJson}; window.macaulay2FocusInputOnLoad = ${focusInputOnLoadJson};</script>\n  </head>`,
+    `<script>window.macaulay2CompletionItems = ${completionItemsJson}; window.macaulay2ColorTheme = ${colorThemeJson}; window.macaulay2FocusInputOnLoad = ${focusInputOnLoadJson}; window.macaulay2TopLevelMode = ${topLevelModeJson};</script>\n  </head>`,
   );
   return html;
 }

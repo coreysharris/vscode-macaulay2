@@ -68,6 +68,7 @@ const Shell = function (
   createInputSpan: boolean,
   completionItems: CompletionItem[] = [],
   focusInputOnLoad = true,
+  initialOutputMode: "webapp" | "standard" = "webapp",
 ) {
   // Shell is an old-style javascript oop constructor
   // we're using arguments as private variables, cf
@@ -80,7 +81,7 @@ const Shell = function (
   cmdHistory.index = 0;
   cmdHistory.sorted = []; // a sorted version
   // input is a bit messy...
-  let outputMode: "webapp" | "standard" = "webapp";
+  let outputMode: "webapp" | "standard" = initialOutputMode;
   let inputEndFlag = false;
   let procInputSpan = null; // temporary span containing currently processed input (for aesthetics only)
   let pendingStandardEcho = "";
@@ -88,6 +89,7 @@ const Shell = function (
   let interpreterDepth = 1;
   const standardPromptClass = "M2StandardPrompt";
   const standardSubmittedInputClass = "M2StandardSubmittedInput";
+  const standardCellClass = "M2StandardCell";
 
   const isEmptyCell = function (el) {
     // tests if a cell is empty
@@ -114,20 +116,27 @@ const Shell = function (
   };
 
   const outputScrollClass = "M2OutputScroll";
+  const standardOutputClass = "M2StandardOutput";
 
   const outputScrollContainer = function (
     cell: HTMLElement,
     beforeNode?: Node | null,
+    standardOutput = false,
   ) {
     const previous =
       beforeNode instanceof Element
         ? beforeNode.previousElementSibling
         : cell.lastElementChild;
-    if (previous && previous.classList.contains(outputScrollClass))
+    if (
+      previous &&
+      previous.classList.contains(outputScrollClass) &&
+      previous.classList.contains(standardOutputClass) == standardOutput
+    )
       return previous as HTMLElement;
 
-    const output = document.createElement("span");
+    const output = document.createElement(standardOutput ? "div" : "span");
     output.className = outputScrollClass;
+    if (standardOutput) output.classList.add(standardOutputClass);
     if (beforeNode) cell.insertBefore(output, beforeNode);
     else cell.appendChild(output);
     return output;
@@ -177,7 +186,9 @@ const Shell = function (
     htmlSec = terminal;
     //    if (editor) htmlSec.appendChild(document.createElement("br")); // a bit of extra space doesn't hurt
     createHtml(webAppClasses[webAppTags.Cell]); // we create a first cell for the whole session
-    createHtml(webAppClasses[webAppTags.Cell]); // and one for the starting text (Macaulay2 version... or whatever comes out of M2 first)
+    if (initialOutputMode === "webapp")
+      createHtml(webAppClasses[webAppTags.Cell]); // and one for the starting text (Macaulay2 version... or whatever comes out of M2 first)
+    else htmlSec.classList.add(standardCellClass);
     htmlSec.appendChild(inputSpan);
 
     if (focusInputOnLoad) inputSpan.focus();
@@ -235,6 +246,8 @@ const Shell = function (
   };
   const enterStandardMode = function () {
     outputMode = "standard";
+    if (htmlSec && htmlSec.classList && htmlSec.classList.contains("M2Cell"))
+      htmlSec.classList.add(standardCellClass);
   };
   const leaveStandardMode = function () {
     outputMode = "webapp";
@@ -1174,6 +1187,7 @@ const Shell = function (
       return outputScrollContainer(
         htmlSec,
         inputSpan && inputSpan.parentElement == htmlSec ? inputSpan : null,
+        outputMode === "standard",
       );
     };
     const target = displayTarget(msg);
@@ -1241,7 +1255,8 @@ const Shell = function (
 
   obj.reset = function () {
     console.log("Reset");
-    leaveStandardMode();
+    outputMode = initialOutputMode;
+    pendingStandardEcho = "";
     pendingErrorOutput = "";
     if (procInputSpan !== null) procInputSpan.remove();
     procInputSpan = null;
