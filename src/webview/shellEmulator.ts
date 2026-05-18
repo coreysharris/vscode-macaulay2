@@ -342,9 +342,45 @@ const Shell = function (
     sanitizeHtmlTree(template.content);
     return template.content;
   };
-  const initializeVectorGraphics = function (container: HTMLElement) {
+  const initializeVectorGraphics = function (
+    container: HTMLElement,
+    retries = 100,
+  ) {
     const initializer = (window as any).gfxInitializeMacaulay2Graphics;
-    if (typeof initializer == "function") initializer(container);
+    if (typeof initializer == "function") {
+      initializer(container);
+      return;
+    }
+    if (retries <= 0) return;
+    setTimeout(() => initializeVectorGraphics(container, retries - 1), 25);
+  };
+  const renderMathInHtml = function (container: HTMLElement) {
+    const renderMath = (window as any).renderMathInElement;
+    if (typeof renderMath != "function") return;
+
+    try {
+      renderMath(container, {
+        strict: false,
+        trust: true,
+        // Dense Macaulay2 output can contain thousands of thin-space macros.
+        maxExpand: 100000,
+        delimiters: [{ left: "$", right: "$", display: false }],
+        ignoredTags: [
+          "script",
+          "noscript",
+          "style",
+          "textarea",
+          "pre",
+          "code",
+          "option",
+          // SVG output is already structured markup, not TeX-bearing prose.
+          "svg",
+          "foreignobject",
+        ],
+      });
+    } catch (err) {
+      console.warn("Could not render Macaulay2 output math", err);
+    }
   };
   const inputSwitchesToStandardMode = function (txt: string) {
     return /(?:^|[;\n])\s*topLevelMode\s*=\s*Standard\s*(?:;|$)/.test(txt);
@@ -1113,11 +1149,19 @@ const Shell = function (
     return htmlSec && htmlSec.classList.contains("M2Input");
   };
 
+  const isOpenBufferedOutputSection = function () {
+    return htmlSec && htmlSec.dataset && htmlSec.dataset.code !== undefined;
+  };
+
   const shouldDeferErrorOutput = function () {
-    // stdout/stderr arrive on separate pipes, so stderr can beat M2's input echo.
+    // stdout/stderr arrive on separate pipes, so stderr can beat M2's input
+    // echo or arrive while a tagged HTML/URL/position payload is still buffered.
     return (
       createInputSpan &&
-      (procInputSpan !== null || inputEndFlag || isOpenInputSection())
+      (procInputSpan !== null ||
+        inputEndFlag ||
+        isOpenInputSection() ||
+        isOpenBufferedOutputSection())
     );
   };
 
@@ -1208,15 +1252,7 @@ const Shell = function (
       // KaTeX rendering // TODO reinstate bundled version
       // autoRender(htmlSec);
       // instead we use the non-bundled katex
-      const renderMath = (window as any).renderMathInElement;
-      if (typeof renderMath == "function")
-        renderMath(htmlSec, {
-          strict: false,
-          trust: true,
-          // Dense Macaulay2 output can contain thousands of thin-space macros.
-          maxExpand: 100000,
-          delimiters: [{ left: "$", right: "$", display: false }],
-        });
+      renderMathInHtml(htmlSec);
       if (colorizationEnabled()) highlightMacaulay2CodeElements(htmlSec);
       initializeVectorGraphics(htmlSec);
       // syntax highlighting code
@@ -1497,6 +1533,15 @@ const Shell = function (
       );
     };
     const target = displayTarget(msg);
+    // Multiline plain output can precede rich output in the same WebApp cell.
+    // Keep it from pushing later SVG/HTML results horizontally off-screen.
+    if (
+      target != htmlSec &&
+      outputMode !== "standard" &&
+      msg.indexOf("\n") >= 0
+    ) {
+      target.style.display = "block";
+    }
     const appendNode = function (node: Node) {
       if (target == htmlSec && inputSpan && inputSpan.parentElement == htmlSec)
         htmlSec.insertBefore(node, inputSpan);
