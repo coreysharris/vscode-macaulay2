@@ -33,11 +33,13 @@ window.addEventListener("message", (event) => {
   switch (message.type) {
     case "output":
       myshell.displayOutput(message.data, message.stream == "stderr");
-      if (outputElement) {
-        outputElement.scrollTop = outputElement.scrollHeight;
-      }
-      // put focus back on editor:
-      if (!myshell.openedHelp) vscode.postMessage({ type: "focus" });
+      requestAnimationFrame(() => {
+        if (outputElement) {
+          outputElement.scrollTop = outputElement.scrollHeight;
+        }
+        // put focus back on editor:
+        if (!myshell.openedHelp) vscode.postMessage({ type: "focus" });
+      });
       break;
     case "submittedInput":
       myshell.recordSubmittedInput(message.data || "");

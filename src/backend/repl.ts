@@ -4,6 +4,10 @@ import * as path from "path";
 
 import { spawn, ChildProcess } from "child_process";
 import {
+  CodeRunStatusMarker,
+  getSubmittedCodeRange,
+} from "./codeRunStatus";
+import {
   getM2ExecutableResolutionDetail,
   getM2LaunchConfiguration,
   M2LaunchArgsConfiguration,
@@ -14,13 +18,36 @@ import { registerM2ExecutableSwitcher } from "./executableSwitcher";
 let g_context: vscode.ExtensionContext | undefined;
 let g_panel: vscode.WebviewPanel | undefined;
 let g_terminal: vscode.Terminal | undefined;
+let g_terminalProcess: ChildProcess | undefined;
 let g_getWebviewCompletionItems:
   | (() => Promise<WebviewCompletionItem[]>)
   | undefined;
 let proc: ChildProcess | undefined;
 let procWorkingDir: string | undefined;
+let procInterruptWithInput = false;
 let shouldRestoreEditorFocusAfterWebviewOutput = false;
 let editorToRestoreAfterWebviewOutput: vscode.TextEditor | undefined;
+type PendingRunMarker = {
+  marker: CodeRunStatusMarker;
+  submittedText: string;
+  observedSubmittedInput: boolean;
+};
+
+const pendingWebviewRunMarkers = new Map<string, PendingRunMarker>();
+let nextWebviewRunMarkerId = 1;
+const pendingTerminalRunMarkers = new Map<string, PendingRunMarker>();
+let nextTerminalRunMarkerId = 1;
+const webAppEndTag = String.fromCharCode(18);
+const webAppCellEndTag = String.fromCharCode(20);
+const webAppPromptTag = String.fromCharCode(14);
+
+type WebviewOutputChunk = {
+  data: string;
+  stream?: "stderr";
+};
+
+const webviewOutputQueue: WebviewOutputChunk[] = [];
+let isDrainingWebviewOutput = false;
 
 type WebviewCompletionItem = {
   label: string;
@@ -119,6 +146,99 @@ function getM2StartupExpression(): string {
   return getM2StartupPatch();
 }
 
+export function outputHasM2CompletionSignal(output: string): boolean {
+  return (
+    output.indexOf(webAppCellEndTag) >= 0 ||
+    /(^|\r?\n+)i+\d+ : $/.test(output)
+  );
+}
+
+function outputHasWebAppPrompt(output: string, startIndex = 0): boolean {
+  return output.indexOf(webAppPromptTag, startIndex) >= 0;
+}
+
+function normalizeM2OutputForRunDetection(output: string): string {
+  return output.replace(/\r/g, "");
+}
+
+export function outputHasWebAppPromptAfterSubmittedInput(
+  output: string,
+  submittedText: string,
+  observedSubmittedInput = false,
+): boolean {
+  output = normalizeM2OutputForRunDetection(output);
+  const inputIndex = output.indexOf(submittedText);
+  if (inputIndex >= 0) {
+    const completionStartIndex = inputIndex + submittedText.length;
+    return (
+      outputHasWebAppPrompt(output, completionStartIndex) ||
+      output.indexOf(webAppCellEndTag, completionStartIndex) >= 0 ||
+      /(^|\n+)i+\d+ : $/.test(output.substring(completionStartIndex))
+    );
+  }
+  return (
+    observedSubmittedInput &&
+    (outputHasWebAppPrompt(output) || outputHasM2CompletionSignal(output))
+  );
+}
+
+function outputHasSubmittedInput(output: string, submittedText: string): boolean {
+  return normalizeM2OutputForRunDetection(output).indexOf(submittedText) >= 0;
+}
+
+function outputHasStandardM2Prompt(output: string, startIndex = 0): boolean {
+  return /(^|\n+)i+\d+ : /.test(
+    normalizeM2OutputForRunDetection(output).substring(startIndex),
+  );
+}
+
+export function outputHasTerminalPromptAfterSubmittedInput(
+  output: string,
+  submittedText: string,
+  observedSubmittedInput = false,
+): boolean {
+  output = normalizeM2OutputForRunDetection(output);
+  const inputIndex = output.indexOf(submittedText);
+  if (inputIndex >= 0) {
+    return outputHasStandardM2Prompt(output, inputIndex + submittedText.length);
+  }
+  return observedSubmittedInput && outputHasStandardM2Prompt(output);
+}
+
+export function splitM2OutputForWebview(output: string): string[] {
+  if (output.length === 0) {
+    return [];
+  }
+
+  if (
+    output.indexOf(webAppEndTag) < 0 &&
+    output.indexOf(webAppCellEndTag) < 0
+  ) {
+    return output.match(/[^\n]*\n|[^\n]+/g) || [];
+  }
+
+  const chunks: string[] = [];
+  let start = 0;
+  for (let index = 0; index < output.length; index++) {
+    const char = output[index];
+    if (char !== webAppEndTag && char !== webAppCellEndTag) {
+      continue;
+    }
+
+    let end = index + 1;
+    if (output[end] === "\r") end++;
+    if (output[end] === "\n") end++;
+    chunks.push(output.substring(start, end));
+    start = end;
+    index = end - 1;
+  }
+
+  if (start < output.length) {
+    chunks.push(output.substring(start));
+  }
+  return chunks;
+}
+
 export function getM2WebviewProcessArgs(
   startupExpression: string,
   topLevelMode: WebviewTopLevelMode = "webapp",
@@ -130,6 +250,42 @@ export function getM2WebviewProcessArgs(
 
 export function getM2TerminalProcessArgs(startupExpression: string): string[] {
   return ["-e", startupExpression];
+}
+
+type ProcessLaunch = {
+  executablePath: string;
+  args: string[];
+  interruptWithInput?: boolean;
+};
+
+type TerminalProcessLaunch = ProcessLaunch & {
+  echoesInput: boolean;
+  interruptWithInput: boolean;
+};
+
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+export function getM2WebviewPtyLaunch(
+  executablePath: string,
+  args: string[],
+): ProcessLaunch {
+  if (process.platform === "linux") {
+    return {
+      executablePath: "script",
+      args: [
+        "-E",
+        "never",
+        "-qfec",
+        [executablePath, ...args].map(shellQuote).join(" "),
+        "/dev/null",
+      ],
+      interruptWithInput: true,
+    };
+  }
+
+  return { executablePath, args };
 }
 
 function getM2LaunchArgs(): M2LaunchArgsConfiguration {
@@ -233,6 +389,12 @@ function normalizeM2Input(text: string): string {
   return text;
 }
 
+export function isM2BlankOrCommentOnly(text: string): boolean {
+  return text
+    .split(/\r?\n/)
+    .every((line) => line.trim().length === 0 || line.trimStart().startsWith("--"));
+}
+
 function startM2() {
   const resolution = getM2ExecutableResolution();
   if (!resolution) {
@@ -245,49 +407,55 @@ function startM2() {
     workingDir,
     getM2LaunchArgs(),
   );
+  const webviewLaunch = getM2WebviewPtyLaunch(
+    launch.executablePath,
+    launch.args,
+  );
 
   // Spawn M2 directly (no shell) so signals like SIGINT reach the M2 process.
   // Previously we used a shell with `2>&1` which merged stderr/stdout but prevented
   // SIGINT from interrupting the actual M2 process. Listening to both stdout and
   // stderr separately preserves output while allowing interrupts to work.
-  const child = spawn(launch.executablePath, launch.args, {
+  const child = spawn(webviewLaunch.executablePath, webviewLaunch.args, {
     cwd: launch.cwd,
   });
   proc = child;
+  procInterruptWithInput = webviewLaunch.interruptWithInput === true;
   console.log("M2 process started (pid=", child.pid, ")");
 
   procWorkingDir = workingDir;
 
   child.stdout.on("data", (data) => {
-    if (g_panel)
-      g_panel.webview.postMessage({ type: "output", data: data.toString() });
+    const output = data.toString();
+    completePendingWebviewRunMarkers(output);
+    if (g_panel) postM2OutputToWebview(output);
   });
 
   child.stderr.on("data", (data) => {
     // forward stderr as output too
-    console.log("M2 stderr:", data.toString());
-    if (g_panel)
-      g_panel.webview.postMessage({
-        type: "output",
-        data: data.toString(),
-        stream: "stderr",
-      });
+    const output = data.toString();
+    console.log("M2 stderr:", output);
+    if (g_panel) postM2OutputToWebview(output, "stderr");
   });
 
   child.on("error", (err) => {
     console.error("M2 process error:", err);
+    disposePendingWebviewRunMarkers();
     if (g_panel)
       g_panel.webview.postMessage({
         type: "output",
         data: `Error starting Macaulay2: ${err.message}`,
       });
     if (proc === child) proc = undefined;
+    if (proc === undefined) procInterruptWithInput = false;
   });
 
   child.on("close", (code, signal) => {
     console.log("M2 process closed. code=", code, "signal=", signal);
     if (g_panel) g_panel.webview.postMessage({ type: "exit", code, signal });
     if (proc === child) proc = undefined;
+    if (proc === undefined) procInterruptWithInput = false;
+    disposePendingWebviewRunMarkers();
   });
 
   /*
@@ -299,6 +467,123 @@ function startM2() {
     });
   });
    */
+}
+
+function completePendingWebviewRunMarkers(output: string) {
+  if (pendingWebviewRunMarkers.size === 0) {
+    return;
+  }
+
+  pendingWebviewRunMarkers.forEach((pending) => {
+    if (outputHasSubmittedInput(output, pending.submittedText)) {
+      pending.observedSubmittedInput = true;
+    }
+  });
+
+  while (pendingWebviewRunMarkers.size > 0) {
+    const next = pendingWebviewRunMarkers.entries().next().value as
+      | [string, PendingRunMarker]
+      | undefined;
+    if (!next) {
+      return;
+    }
+    const [markerId, pending] = next;
+    if (
+      !outputHasWebAppPromptAfterSubmittedInput(
+        output,
+        pending.submittedText,
+        pending.observedSubmittedInput,
+      )
+    ) {
+      return;
+    }
+
+    pending.marker.completed();
+    pendingWebviewRunMarkers.delete(markerId);
+  }
+}
+
+function completePendingTerminalRunMarkers(output: string) {
+  if (pendingTerminalRunMarkers.size === 0) {
+    return;
+  }
+
+  pendingTerminalRunMarkers.forEach((pending) => {
+    if (outputHasSubmittedInput(output, pending.submittedText)) {
+      pending.observedSubmittedInput = true;
+    }
+  });
+
+  while (pendingTerminalRunMarkers.size > 0) {
+    const next = pendingTerminalRunMarkers.entries().next().value as
+      | [string, PendingRunMarker]
+      | undefined;
+    if (!next) {
+      return;
+    }
+    const [markerId, pending] = next;
+    if (
+      !outputHasTerminalPromptAfterSubmittedInput(
+        output,
+        pending.submittedText,
+        pending.observedSubmittedInput,
+      )
+    ) {
+      return;
+    }
+
+    pending.marker.completed();
+    pendingTerminalRunMarkers.delete(markerId);
+  }
+}
+
+function disposePendingWebviewRunMarkers() {
+  pendingWebviewRunMarkers.forEach((pending) => pending.marker.dispose());
+  pendingWebviewRunMarkers.clear();
+}
+
+function disposePendingTerminalRunMarkers() {
+  pendingTerminalRunMarkers.forEach((pending) => pending.marker.dispose());
+  pendingTerminalRunMarkers.clear();
+}
+
+function postM2OutputToWebview(output: string, stream?: "stderr") {
+  splitM2OutputForWebview(output).forEach((chunk) => {
+    webviewOutputQueue.push({ data: chunk, stream });
+  });
+  drainWebviewOutputQueue();
+}
+
+function drainWebviewOutputQueue() {
+  if (isDrainingWebviewOutput) {
+    return;
+  }
+
+  isDrainingWebviewOutput = true;
+  const drainNext = () => {
+    if (!g_panel) {
+      webviewOutputQueue.length = 0;
+      isDrainingWebviewOutput = false;
+      return;
+    }
+
+    if (webviewOutputQueue.length === 0) {
+      isDrainingWebviewOutput = false;
+      return;
+    }
+
+    const batchSize = webviewOutputQueue.length > 100 ? 10 : 1;
+    const batch = webviewOutputQueue.splice(0, batchSize);
+    batch.forEach((next) => {
+      g_panel!.webview.postMessage({
+        type: "output",
+        data: next.data,
+        stream: next.stream,
+      });
+    });
+    setTimeout(drainNext, 16);
+  };
+  setTimeout(drainNext, 0);
 }
 
 function startREPLCommand() {
@@ -349,7 +634,7 @@ async function executeCode(
   text: string,
   restoreEditorFocus = false,
   recordSubmittedInput = false,
-) {
+): Promise<boolean> {
   const editorToRestore = restoreEditorFocus
     ? vscode.window.activeTextEditor
     : undefined;
@@ -366,13 +651,44 @@ async function executeCode(
       });
     }
     proc.stdin.write(text);
+    return true;
   } else {
     vscode.window.showErrorMessage("Macaulay2 process is not running.");
+    return false;
   }
 }
 
 function startTerminalCommand() {
   startM2Terminal(false);
+}
+
+export function getM2TerminalPtyLaunch(
+  executablePath: string,
+  args: string[],
+): TerminalProcessLaunch {
+  if (process.platform === "linux") {
+    return {
+      executablePath: "script",
+      args: [
+        "-qfec",
+        [executablePath, ...args].map(shellQuote).join(" "),
+        "/dev/null",
+      ],
+      echoesInput: true,
+      interruptWithInput: true,
+    };
+  }
+
+  return {
+    executablePath,
+    args,
+    echoesInput: false,
+    interruptWithInput: false,
+  };
+}
+
+function toTerminalOutput(output: string): string {
+  return output.replace(/\r?\n/g, "\r\n");
 }
 
 function startM2Terminal(preserveFocus: boolean): vscode.Terminal | undefined {
@@ -381,6 +697,7 @@ function startM2Terminal(preserveFocus: boolean): vscode.Terminal | undefined {
     return g_terminal;
   }
   g_terminal = undefined;
+  g_terminalProcess = undefined;
 
   const resolution = getM2ExecutableResolution();
   if (!resolution) {
@@ -394,11 +711,115 @@ function startM2Terminal(preserveFocus: boolean): vscode.Terminal | undefined {
     workingDir,
     getM2LaunchArgs(),
   );
+  const writeEmitter = new vscode.EventEmitter<string>();
+  const closeEmitter = new vscode.EventEmitter<number>();
+  const terminalLaunch = getM2TerminalPtyLaunch(
+    launch.executablePath,
+    launch.args,
+  );
+  let queuedInput = "";
+  const outputQueue: string[] = [];
+  let isDrainingOutput = false;
+
+  const drainOutputQueue = () => {
+    if (isDrainingOutput) {
+      return;
+    }
+
+    isDrainingOutput = true;
+    const drainBatch = () => {
+      const batch = outputQueue.splice(0, 20).join("");
+      if (batch.length > 0) {
+        writeEmitter.fire(batch);
+      }
+
+      if (outputQueue.length > 0) {
+        setTimeout(drainBatch, 0);
+      } else {
+        isDrainingOutput = false;
+      }
+    };
+    setTimeout(drainBatch, 0);
+  };
+
+  const writeTerminalOutput = (output: string) => {
+    const chunks = output.match(/[^\n]*\n|[^\n]+/g);
+    if (!chunks) {
+      return;
+    }
+
+    chunks.forEach((chunk) => outputQueue.push(toTerminalOutput(chunk)));
+    drainOutputQueue();
+  };
+
+  const pty: vscode.Pseudoterminal = {
+    onDidWrite: writeEmitter.event,
+    onDidClose: closeEmitter.event,
+    open: () => {
+      const child = spawn(terminalLaunch.executablePath, terminalLaunch.args, {
+        cwd: launch.cwd,
+      });
+      g_terminalProcess = child;
+      if (queuedInput.length > 0 && child.stdin) {
+        child.stdin.write(queuedInput);
+        queuedInput = "";
+      }
+
+      child.stdout.on("data", (data) => {
+        const output = data.toString();
+        completePendingTerminalRunMarkers(output);
+        writeTerminalOutput(output);
+      });
+
+      child.stderr.on("data", (data) => {
+        const output = data.toString();
+        writeTerminalOutput(output);
+      });
+
+      child.on("error", (err) => {
+        disposePendingTerminalRunMarkers();
+        writeEmitter.fire(`Error starting Macaulay2: ${err.message}\r\n`);
+        g_terminalProcess = undefined;
+        closeEmitter.fire(1);
+      });
+
+      child.on("close", (code) => {
+        disposePendingTerminalRunMarkers();
+        g_terminalProcess = undefined;
+        closeEmitter.fire(code || 0);
+      });
+    },
+    close: () => {
+      disposePendingTerminalRunMarkers();
+      if (g_terminalProcess) {
+        g_terminalProcess.kill();
+        g_terminalProcess = undefined;
+      }
+    },
+    handleInput: (data: string) => {
+      if (!g_terminalProcess || !g_terminalProcess.stdin) {
+        if (!terminalLaunch.echoesInput) writeEmitter.fire(toTerminalOutput(data));
+        queuedInput += data.replace(/\r/g, "\n");
+        return;
+      }
+
+      if (data === "\x03") {
+        if (terminalLaunch.interruptWithInput) {
+          g_terminalProcess.stdin.write(data);
+        } else {
+          writeEmitter.fire("^C\r\n");
+          g_terminalProcess.kill("SIGINT");
+        }
+        return;
+      }
+
+      if (!terminalLaunch.echoesInput) writeEmitter.fire(toTerminalOutput(data));
+      g_terminalProcess.stdin.write(data.replace(/\r/g, "\n"));
+    },
+  };
   g_terminal = vscode.window.createTerminal({
     name: "Macaulay2",
-    shellPath: launch.executablePath,
-    shellArgs: launch.args,
-    cwd: launch.cwd,
+    pty,
   });
   g_terminal.show(preserveFocus);
   return g_terminal;
@@ -460,49 +881,94 @@ function restartM2Terminal() {
   startM2Terminal(false);
 }
 
-async function executeCodeInTerminal(text: string) {
+async function executeCodeInTerminal(text: string): Promise<boolean> {
   const terminal = startM2Terminal(true);
   if (!terminal) {
-    return;
+    return false;
   }
 
   text = normalizeM2Input(text);
   terminal.sendText(text, false);
+  return true;
 }
 
-function getSelectedM2Code(): string | undefined {
+type SelectedM2Code = {
+  editor: vscode.TextEditor;
+  range: vscode.Range;
+  text: string;
+};
+
+function getSelectedM2Code(): SelectedM2Code | undefined {
   var editor = vscode.window.activeTextEditor;
   if (!editor) {
     return undefined;
   }
 
   var selection = editor.selection;
-  return selection.isEmpty
-    ? editor.document.lineAt(selection.start.line).text
-    : editor.document.getText(selection);
+  const range = getSubmittedCodeRange(editor);
+  return {
+    editor,
+    range,
+    text: selection.isEmpty
+      ? editor.document.lineAt(selection.start.line).text
+      : editor.document.getText(selection),
+  };
 }
 
 function executeSelectionInTerminal() {
-  const text = getSelectedM2Code();
-  if (text === undefined) {
+  const code = getSelectedM2Code();
+  if (code === undefined) {
+    return;
+  }
+  if (isM2BlankOrCommentOnly(code.text)) {
+    moveCursorDown();
     return;
   }
 
-  executeCodeInTerminal(text);
-  vscode.commands.executeCommand("cursorMove", {
-    to: "down",
-    by: "line",
-    value: 1,
+  const marker = new CodeRunStatusMarker(code.editor, code.range);
+  const markerId = String(nextTerminalRunMarkerId++);
+  marker.running();
+  pendingTerminalRunMarkers.set(markerId, {
+    marker,
+    submittedText: normalizeM2Input(code.text),
+    observedSubmittedInput: false,
   });
+  executeCodeInTerminal(code.text).then((sent) => {
+    if (!sent) {
+      pendingTerminalRunMarkers.delete(markerId);
+      marker.dispose();
+    }
+  });
+  moveCursorDown();
 }
 
 async function executeSelectionInWebview() {
-  const text = getSelectedM2Code();
-  if (text === undefined) {
+  const code = getSelectedM2Code();
+  if (code === undefined) {
+    return;
+  }
+  if (isM2BlankOrCommentOnly(code.text)) {
+    moveCursorDown();
     return;
   }
 
-  await executeCode(text, true, true);
+  const marker = new CodeRunStatusMarker(code.editor, code.range);
+  const markerId = String(nextWebviewRunMarkerId++);
+  marker.running();
+  pendingWebviewRunMarkers.set(markerId, {
+    marker,
+    submittedText: normalizeM2Input(code.text),
+    observedSubmittedInput: false,
+  });
+  const sent = await executeCode(code.text, true, true);
+  if (!sent) {
+    pendingWebviewRunMarkers.delete(markerId);
+    marker.dispose();
+  }
+  moveCursorDown();
+}
+
+function moveCursorDown() {
   vscode.commands.executeCommand("cursorMove", {
     to: "down",
     by: "line",
@@ -974,15 +1440,21 @@ function interruptM2() {
     !g_terminal.exitStatus &&
     (vscode.window.activeTerminal === g_terminal || !proc)
   ) {
+    disposePendingTerminalRunMarkers();
     g_terminal.sendText("\x03", false);
     return;
   }
 
   if (!proc) return;
+  disposePendingWebviewRunMarkers();
 
   try {
     // Best-effort: send SIGINT to the child process so it can interrupt computations.
-    proc.kill("SIGINT");
+    if (procInterruptWithInput && proc.stdin) {
+      proc.stdin.write("\x03");
+    } else {
+      proc.kill("SIGINT");
+    }
   } catch (e) {
     console.error("Failed to send SIGINT to M2 process:", e);
     // On Windows, proc.kill('SIGINT') may not work. Attempt taskkill as a fallback.

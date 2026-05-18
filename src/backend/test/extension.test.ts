@@ -16,11 +16,20 @@ import {
   normalizeM2LaunchArgs,
   windowsPathToWslPath,
 } from "../executablePath";
+import { getCodeRunStatusText } from "../codeRunStatus";
 import {
   getM2StartupPatch,
+  getM2TerminalPtyLaunch,
   getM2TerminalProcessArgs,
+  getM2WebviewPtyLaunch,
   getM2WebviewProcessArgs,
+  isM2BlankOrCommentOnly,
+  outputHasM2CompletionSignal,
+  outputHasTerminalPromptAfterSubmittedInput,
+  outputHasWebAppPromptAfterSubmittedInput,
+  splitM2OutputForWebview,
 } from "../repl";
+import { applyWordsToPetProgress, getPetMood } from "../pet";
 
 // You can import and use all API from the 'vscode' module
 // as well as import your extension to test it
@@ -120,6 +129,42 @@ suite("Executable Launch", function () {
       "-e",
       "startupPatch",
     ]);
+  });
+
+  test("wraps Linux terminal launches in a pseudo-tty", function () {
+    const launch = getM2TerminalPtyLaunch("/usr/bin/M2", ["--silent"]);
+    if (process.platform === "linux") {
+      assert.equal(launch.executablePath, "script");
+      assert.deepEqual(launch.args, [
+        "-qfec",
+        "'/usr/bin/M2' '--silent'",
+        "/dev/null",
+      ]);
+      assert.equal(launch.echoesInput, true);
+      assert.equal(launch.interruptWithInput, true);
+    } else {
+      assert.equal(launch.executablePath, "/usr/bin/M2");
+      assert.deepEqual(launch.args, ["--silent"]);
+      assert.equal(launch.echoesInput, false);
+      assert.equal(launch.interruptWithInput, false);
+    }
+  });
+
+  test("wraps Linux webview launches in a pseudo-tty without input echo", function () {
+    const launch = getM2WebviewPtyLaunch("/usr/bin/M2", ["--webapp"]);
+    if (process.platform === "linux") {
+      assert.equal(launch.executablePath, "script");
+      assert.deepEqual(launch.args, [
+        "-E",
+        "never",
+        "-qfec",
+        "'/usr/bin/M2' '--webapp'",
+        "/dev/null",
+      ]);
+    } else {
+      assert.equal(launch.executablePath, "/usr/bin/M2");
+      assert.deepEqual(launch.args, ["--webapp"]);
+    }
   });
 
   test("normalizes configured M2 launch arguments", function () {
@@ -228,5 +273,123 @@ suite("Executable Launch", function () {
         ],
       },
     );
+  });
+});
+
+suite("Macaulay2 Pet", function () {
+  test("gets sad after enough idle time", function () {
+    assert.equal(getPetMood(0), "happy");
+    assert.equal(getPetMood(9000), "content");
+    assert.equal(getPetMood(21000), "sad");
+  });
+
+  test("levels up after powers of ten words", function () {
+    assert.deepEqual(
+      applyWordsToPetProgress({ level: 1, wordsTowardNextLevel: 9 }, 1),
+      { level: 2, wordsTowardNextLevel: 0 },
+    );
+    assert.deepEqual(
+      applyWordsToPetProgress({ level: 2, wordsTowardNextLevel: 99 }, 3),
+      { level: 3, wordsTowardNextLevel: 2 },
+    );
+  });
+});
+
+suite("Macaulay2 Code Run Status", function () {
+  test("labels submitted code states", function () {
+    assert.equal(getCodeRunStatusText("waiting"), "  M2 waiting");
+    assert.equal(getCodeRunStatusText("running"), "  M2 running");
+    assert.equal(getCodeRunStatusText("completed"), "  M2 completed");
+  });
+
+  test("detects blank or comment-only submissions", function () {
+    assert.equal(isM2BlankOrCommentOnly(""), true);
+    assert.equal(isM2BlankOrCommentOnly("   \n\t"), true);
+    assert.equal(isM2BlankOrCommentOnly("-- just a comment"), true);
+    assert.equal(isM2BlankOrCommentOnly("  -- indented comment\n\n-- next"), true);
+    assert.equal(isM2BlankOrCommentOnly("x = 1 -- trailing comment"), false);
+    assert.equal(isM2BlankOrCommentOnly("-- comment\nx = 1"), false);
+  });
+
+  test("detects webview completion output", function () {
+    assert.equal(
+      outputHasM2CompletionSignal("output" + String.fromCharCode(20)),
+      true,
+    );
+    assert.equal(outputHasM2CompletionSignal("answer\n\ni24 : "), true);
+    assert.equal(outputHasM2CompletionSignal("answer\r\n\r\ni24 : "), true);
+    assert.equal(outputHasM2CompletionSignal("still running"), false);
+  });
+
+  test("detects quiet WebApp completion after submitted input", function () {
+    const promptTag = String.fromCharCode(14);
+    const submittedInput = "x = 1;\n";
+
+    assert.equal(
+      outputHasWebAppPromptAfterSubmittedInput(
+        `${promptTag}i1 : ${submittedInput}`,
+        submittedInput,
+      ),
+      false,
+    );
+    assert.equal(
+      outputHasWebAppPromptAfterSubmittedInput(
+        `${promptTag}i1 : x = 1;\r\n${promptTag}i2 : `,
+        submittedInput,
+      ),
+      true,
+    );
+    assert.equal(
+      outputHasWebAppPromptAfterSubmittedInput(
+        `${promptTag}i2 : `,
+        submittedInput,
+        true,
+      ),
+      true,
+    );
+  });
+
+  test("detects quiet terminal completion after submitted input", function () {
+    const submittedInput = "x = 1;\n";
+
+    assert.equal(
+      outputHasTerminalPromptAfterSubmittedInput(
+        `\r\ni1 : x = 1;\r\n`,
+        submittedInput,
+      ),
+      false,
+    );
+    assert.equal(
+      outputHasTerminalPromptAfterSubmittedInput(
+        `x = 1;\r\n\r\ni2 : `,
+        submittedInput,
+      ),
+      true,
+    );
+    assert.equal(
+      outputHasTerminalPromptAfterSubmittedInput(
+        `\r\ni2 : `,
+        submittedInput,
+        true,
+      ),
+      true,
+    );
+    assert.equal(
+      outputHasTerminalPromptAfterSubmittedInput(
+        `\r\ni3 : sleep(2)\r\n`,
+        "sleep(2)\n",
+      ),
+      false,
+    );
+  });
+
+  test("splits webview output on WebApp section boundaries", function () {
+    assert.deepEqual(
+      splitM2OutputForWebview(
+        `a${String.fromCharCode(18)}\nb${String.fromCharCode(18)}\n`,
+      ),
+      [`a${String.fromCharCode(18)}\n`, `b${String.fromCharCode(18)}\n`],
+    );
+    assert.deepEqual(splitM2OutputForWebview("1\n2\n"), ["1\n", "2\n"]);
   });
 });

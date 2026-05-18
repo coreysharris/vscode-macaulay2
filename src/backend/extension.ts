@@ -3,6 +3,7 @@
 "use strict";
 
 import * as vscode from "vscode";
+import * as pet from "./pet";
 import * as repl from "./repl";
 import hljs from "highlight.js/lib/core";
 import hljsM2 from "highlightjs-macaulay2";
@@ -72,6 +73,7 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   repl.activate(context, getWebviewCompletionItems);
+  pet.activate(context);
 
   return {
     // markdown-it plugin to highlight m2 code in markdown previews

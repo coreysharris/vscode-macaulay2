@@ -721,6 +721,102 @@ const Shell = function (
     return el.classList.contains(standardSubmittedInputClass);
   };
 
+  const inputKeywords = new Set([
+    "and",
+    "break",
+    "do",
+    "else",
+    "for",
+    "from",
+    "if",
+    "in",
+    "list",
+    "local",
+    "not",
+    "or",
+    "return",
+    "scan",
+    "then",
+    "to",
+    "while",
+  ]);
+
+  const inputConstants = new Set([
+    "CC",
+    "false",
+    "GF",
+    "QQ",
+    "RR",
+    "true",
+    "ZZ",
+  ]);
+
+  const inputFunctions = new Set([
+    "append",
+    "apply",
+    "flatten",
+    "ideal",
+    "matrix",
+    "method",
+    "new",
+    "print",
+    "printerr",
+  ]);
+
+  const appendInputToken = function (
+    parent: HTMLElement,
+    text: string,
+    className?: string,
+  ) {
+    if (text.length == 0) return;
+    if (!className) {
+      parent.appendChild(document.createTextNode(text));
+      return;
+    }
+
+    const span = document.createElement("span");
+    span.className = className;
+    span.textContent = text;
+    parent.appendChild(span);
+  };
+
+  const appendHighlightedInput = function (parent: HTMLElement, input: string) {
+    let index = 0;
+    while (index < input.length) {
+      const rest = input.substring(index);
+      const comment = /^--[^\n]*/.exec(rest);
+      if (comment) {
+        appendInputToken(parent, comment[0], "token comment");
+        index += comment[0].length;
+        continue;
+      }
+
+      const str = /^"(?:\\.|[^"\\])*"/.exec(rest);
+      if (str) {
+        appendInputToken(parent, str[0], "token string");
+        index += str[0].length;
+        continue;
+      }
+
+      const identifier = /^[A-Za-z][A-Za-z0-9_?']*/.exec(rest);
+      if (identifier) {
+        const word = identifier[0];
+        if (inputKeywords.has(word))
+          appendInputToken(parent, word, "token keyword");
+        else if (inputConstants.has(word))
+          appendInputToken(parent, word, "token constant");
+        else if (inputFunctions.has(word))
+          appendInputToken(parent, word, "token function");
+        else appendInputToken(parent, word);
+        index += word.length;
+        continue;
+      }
+
+      appendInputToken(parent, input[index]);
+      index++;
+    }
+  };
+
   const appendSubmittedInput = function (clean: string) {
     if (procInputSpan === null) {
       // it'd be nicer to use ::before on inputSpan but sadly caret issues... cf https://stackoverflow.com/questions/60843694/cursor-position-in-an-editable-div-with-a-before-pseudo-element
@@ -728,13 +824,16 @@ const Shell = function (
     }
 
     if (isStandardSubmittedInput(procInputSpan)) {
-      procInputSpan.textContent += clean;
+      appendHighlightedInput(procInputSpan, clean);
       pendingStandardEcho += clean + "\n";
       inputSpan.parentElement.insertBefore(
         document.createTextNode("\n"),
         inputSpan,
       );
-    } else procInputSpan.textContent += clean + returnSymbol + "\n";
+    } else {
+      appendHighlightedInput(procInputSpan, clean);
+      procInputSpan.appendChild(document.createTextNode(returnSymbol + "\n"));
+    }
   };
 
   const suppressPendingStandardEcho = function (msg: string) {
@@ -1103,12 +1202,9 @@ const Shell = function (
         });
       }
       // highlight
-      /*
-      htmlSec.innerHTML = Prism.highlight(
-        htmlSec.textContent,
-        Prism.languages.macaulay2
-      );
-       */
+      const inputText = htmlSec.textContent;
+      htmlSec.textContent = "";
+      appendHighlightedInput(htmlSec, inputText);
       htmlSec.classList.add("M2PastInput");
       if (colorizationEnabled()) highlightMacaulay2Element(htmlSec);
     } else if (htmlSec.classList.contains("M2Html")) {
