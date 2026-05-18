@@ -16,7 +16,11 @@ import {
   normalizeM2LaunchArgs,
   windowsPathToWslPath,
 } from "../executablePath";
-import { getM2StartupPatch, getM2WebviewProcessArgs } from "../repl";
+import {
+  getM2StartupPatch,
+  getM2TerminalProcessArgs,
+  getM2WebviewProcessArgs,
+} from "../repl";
 
 // You can import and use all API from the 'vscode' module
 // as well as import your extension to test it
@@ -96,6 +100,13 @@ suite("Executable Launch", function () {
   test("builds webview process args for WebApp output", function () {
     assert.deepEqual(getM2WebviewProcessArgs("startupPatch"), [
       "--webapp",
+      "-e",
+      "startupPatch",
+    ]);
+  });
+
+  test("builds terminal process args with extension startup patch", function () {
+    assert.deepEqual(getM2TerminalProcessArgs("startupPatch"), [
       "-e",
       "startupPatch",
     ]);

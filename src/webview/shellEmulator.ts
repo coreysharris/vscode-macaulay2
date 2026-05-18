@@ -80,10 +80,14 @@ const Shell = function (
   cmdHistory.index = 0;
   cmdHistory.sorted = []; // a sorted version
   // input is a bit messy...
+  let outputMode: "webapp" | "standard" = "webapp";
   let inputEndFlag = false;
   let procInputSpan = null; // temporary span containing currently processed input (for aesthetics only)
+  let pendingStandardEcho = "";
   let pendingErrorOutput = "";
   let interpreterDepth = 1;
+  const standardPromptClass = "M2StandardPrompt";
+  const standardSubmittedInputClass = "M2StandardSubmittedInput";
 
   const isEmptyCell = function (el) {
     // tests if a cell is empty
@@ -225,6 +229,16 @@ const Shell = function (
   };
   const normalizePlainText = function (txt: string) {
     return txt.replace(/\t/g, "    ");
+  };
+  const inputSwitchesToStandardMode = function (txt: string) {
+    return /(?:^|[;\n])\s*topLevelMode\s*=\s*Standard\s*(?:;|$)/.test(txt);
+  };
+  const enterStandardMode = function () {
+    outputMode = "standard";
+  };
+  const leaveStandardMode = function () {
+    outputMode = "webapp";
+    pendingStandardEcho = "";
   };
   const clipboardText = function (data: DataTransfer | null) {
     return data ? normalizePlainText(data.getData("text/plain")) : "";
@@ -485,16 +499,66 @@ const Shell = function (
     }
   };
 
+  const inputFollowsStandardPrompt = function () {
+    return (
+      outputMode === "standard" &&
+      inputSpan.previousElementSibling &&
+      inputSpan.previousElementSibling.classList.contains(standardPromptClass)
+    );
+  };
+
+  const createProcessingInputSpan = function () {
+    const isStandardInput = inputFollowsStandardPrompt();
+    const span = document.createElement(isStandardInput ? "span" : "div");
+    if (isStandardInput)
+      span.className = "M2Text M2PastInput " + standardSubmittedInputClass;
+    inputSpan.parentElement.insertBefore(span, inputSpan);
+    return span;
+  };
+
+  const isStandardSubmittedInput = function (el: HTMLElement) {
+    return el.classList.contains(standardSubmittedInputClass);
+  };
+
+  const appendSubmittedInput = function (clean: string) {
+    if (procInputSpan === null) {
+      // it'd be nicer to use ::before on inputSpan but sadly caret issues... cf https://stackoverflow.com/questions/60843694/cursor-position-in-an-editable-div-with-a-before-pseudo-element
+      procInputSpan = createProcessingInputSpan();
+    }
+
+    if (isStandardSubmittedInput(procInputSpan)) {
+      procInputSpan.textContent += clean;
+      pendingStandardEcho += clean + "\n";
+      inputSpan.parentElement.insertBefore(
+        document.createTextNode("\n"),
+        inputSpan,
+      );
+    } else procInputSpan.textContent += clean + returnSymbol + "\n";
+  };
+
+  const suppressPendingStandardEcho = function (msg: string) {
+    if (pendingStandardEcho.length == 0) return msg;
+
+    if (pendingStandardEcho.startsWith(msg)) {
+      pendingStandardEcho = pendingStandardEcho.substring(msg.length);
+      return "";
+    }
+
+    if (msg.startsWith(pendingStandardEcho)) {
+      const result = msg.substring(pendingStandardEcho.length);
+      pendingStandardEcho = "";
+      return result;
+    }
+
+    pendingStandardEcho = "";
+    return msg;
+  };
+
   obj.postMessage = function (msg) {
     hideCompletionMenu();
     // send input, adding \n if necessary
     const clean = sanitizeInput(msg);
-    if (procInputSpan === null) {
-      // it'd be nicer to use ::before on inputSpan but sadly caret issues... cf https://stackoverflow.com/questions/60843694/cursor-position-in-an-editable-div-with-a-before-pseudo-element
-      procInputSpan = document.createElement("div");
-      inputSpan.parentElement.insertBefore(procInputSpan, inputSpan);
-    }
-    procInputSpan.textContent += clean + returnSymbol + "\n";
+    appendSubmittedInput(clean);
     inputSpan.textContent = "";
     scrollDownLeft(terminal);
     emit("input", clean + "\n");
@@ -972,10 +1036,12 @@ const Shell = function (
       return;
     }
     if (procInputSpan !== null) {
-      procInputSpan.remove();
+      if (!isStandardSubmittedInput(procInputSpan)) procInputSpan.remove();
       procInputSpan = null;
     }
-    const txt = msg.replace(/\r/g, "").split(webAppRegex);
+    msg = msg.replace(/\r/g, "");
+    if (!isErrorOutput) msg = suppressPendingStandardEcho(msg);
+    const txt = msg.split(webAppRegex);
     for (let i = 0; i < txt.length; i += 2) {
       //console.log(i+"-"+(i+1)+"/"+txt.length+": ",i==0?"":webAppClasses[txt[i-1]]," : ",txt[i].replace("\n",returnSymbol));
       // if we are at the end of an input section
@@ -988,6 +1054,7 @@ const Shell = function (
         inputEndFlag = false;
       }
       if (i > 0) {
+        leaveStandardMode();
         const tag = txt[i - 1];
         if (tag == webAppTags.End || tag == webAppTags.CellEnd) {
           if (htmlSec != terminal || !createInputSpan) {
@@ -1019,9 +1086,14 @@ const Shell = function (
         if (htmlSec.classList.contains("M2Input")) {
           const ii = txt[i].indexOf("\n");
           if (ii >= 0) {
-            if (ii < txt[i].length - 1) {
+            const inputLine = txt[i].substring(0, ii + 1);
+            const switchesToStandardMode = inputSwitchesToStandardMode(
+              htmlSec.textContent + inputLine,
+            );
+            if (ii < txt[i].length - 1 || switchesToStandardMode) {
               // need to do some surgery
-              displayText(txt[i].substring(0, ii + 1));
+              displayText(inputLine);
+              if (switchesToStandardMode) enterStandardMode();
               closeHtml();
               txt[i] = txt[i].substring(ii + 1, txt[i].length);
             } else inputEndFlag = true;
@@ -1029,8 +1101,10 @@ const Shell = function (
           }
         }
 
-        if (htmlSec.dataset.code !== undefined) htmlSec.dataset.code += txt[i];
-        else displayText(txt[i]);
+        if (txt[i].length > 0) {
+          if (htmlSec.dataset.code !== undefined) htmlSec.dataset.code += txt[i];
+          else displayText(txt[i]);
+        }
         //          if (l.contains("M2Html")) htmlSec.innerHTML = htmlSec.dataset.code; // used to update in real time
         // all other states are raw text -- don't rewrite htmlSec.textContent+=txt[i] in case of input
       }
@@ -1039,7 +1113,52 @@ const Shell = function (
     scrollDownLeft(terminal);
   };
 
+  const parseTrailingStandardPrompt = function (
+    txt: string,
+  ): {
+    before: string;
+    separator: string;
+    prompt: string;
+    suffix: string;
+  } | null {
+    // Standard topLevelMode prints terminal-style prompts with no WebApp tags.
+    // Keep only the prompt label underlined; the surrounding separators are text.
+    const match = /(^|\n+)(i+\d+)( : )$/.exec(txt);
+    if (!match) return null;
+    return {
+      before: txt.substring(0, match.index),
+      separator: match[1],
+      prompt: match[2],
+      suffix: match[3],
+    };
+  };
+
   const displayText = function (msg) {
+    const standardPrompt =
+      inputSpan && inputSpan.parentElement == htmlSec
+        ? parseTrailingStandardPrompt(msg)
+        : null;
+    if (standardPrompt) {
+      enterStandardMode();
+      if (standardPrompt.before.length > 0) displayText(standardPrompt.before);
+      if (standardPrompt.separator.length > 0)
+        htmlSec.insertBefore(
+          document.createTextNode(standardPrompt.separator),
+          inputSpan,
+        );
+      const promptSpan = document.createElement("span");
+      promptSpan.className = webAppClasses[webAppTags.Prompt];
+      promptSpan.classList.add(standardPromptClass);
+      promptSpan.appendChild(document.createTextNode(standardPrompt.prompt));
+      htmlSec.insertBefore(promptSpan, inputSpan);
+      if (standardPrompt.suffix.length > 0)
+        htmlSec.insertBefore(
+          document.createTextNode(standardPrompt.suffix),
+          inputSpan,
+        );
+      return;
+    }
+
     const displayTarget = function (txt: string) {
       if (!htmlSec.classList.contains("M2Cell")) return htmlSec;
       if (/^[\s:=]*$/.test(txt)) return htmlSec;

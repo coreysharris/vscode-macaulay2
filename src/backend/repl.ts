@@ -103,6 +103,10 @@ export function getM2WebviewProcessArgs(startupExpression: string): string[] {
   return ["--webapp", "-e", startupExpression];
 }
 
+export function getM2TerminalProcessArgs(startupExpression: string): string[] {
+  return ["-e", startupExpression];
+}
+
 function getM2LaunchArgs(): M2LaunchArgsConfiguration {
   return vscode.workspace
     .getConfiguration("macaulay2")
@@ -344,7 +348,7 @@ function startM2Terminal(preserveFocus: boolean): vscode.Terminal | undefined {
   const workingDir = getM2WorkingDir();
   const launch = getM2LaunchConfiguration(
     resolution,
-    [],
+    getM2TerminalProcessArgs(getM2StartupExpression()),
     workingDir,
     getM2LaunchArgs(),
   );
