@@ -1477,12 +1477,11 @@ const Shell = function (
             ? beforeNode.previousElementSibling
             : htmlSec.lastElementChild;
         if (
-          txt === "\n" &&
+          txt.indexOf("\n") >= 0 &&
           previous &&
           previous.classList.contains(outputScrollClass) &&
           previous.classList.contains(standardOutputClass) ==
-            (outputMode === "standard") &&
-          outputContainerOwnsNewline(previous)
+            (outputMode === "standard")
         )
           return previous as HTMLElement;
         return htmlSec;
@@ -1491,15 +1490,6 @@ const Shell = function (
         htmlSec,
         inputSpan && inputSpan.parentElement == htmlSec ? inputSpan : null,
         outputMode === "standard",
-      );
-    };
-    const outputContainerOwnsNewline = function (previous: Element) {
-      return (
-        outputMode === "standard" ||
-        !(
-          previous.lastElementChild &&
-          previous.lastElementChild.classList.contains("M2Html")
-        )
       );
     };
     const target = displayTarget(msg);
