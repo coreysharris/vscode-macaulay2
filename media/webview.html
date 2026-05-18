@@ -217,6 +217,13 @@
         color: var(--vscode-list-activeSelectionForeground, #fff);
       }
 
+      #webviewActionBar {
+        position: fixed;
+        right: 0;
+        top: 0;
+        z-index: 10000;
+      }
+
       .M2CompletionKind {
         color: var(--vscode-descriptionForeground, #666);
         font-size: 11px;
@@ -319,7 +326,7 @@
   </head>
   <body>
     <div id="terminal" class="M2Text">
-      <span style="z-index:1; position:fixed; right:0px; top:0px;">
+      <span id="webviewActionBar">
         <button id="resetBtn">RESET</button><button id="interruptBtn">INTERRUPT</button>
       </span>
     </div>
