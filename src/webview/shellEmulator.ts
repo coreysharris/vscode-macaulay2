@@ -1191,7 +1191,7 @@ const Shell = function (
             ? beforeNode.previousElementSibling
             : htmlSec.lastElementChild;
         if (
-          txt.indexOf("\n") >= 0 &&
+          txt === "\n" &&
           previous &&
           previous.classList.contains(outputScrollClass) &&
           previous.classList.contains(standardOutputClass) ==
