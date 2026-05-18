@@ -1183,7 +1183,23 @@ const Shell = function (
 
     const displayTarget = function (txt: string) {
       if (!htmlSec.classList.contains("M2Cell")) return htmlSec;
-      if (/^[\s:=]*$/.test(txt)) return htmlSec;
+      if (/^[\s:=]*$/.test(txt)) {
+        const beforeNode =
+          inputSpan && inputSpan.parentElement == htmlSec ? inputSpan : null;
+        const previous =
+          beforeNode instanceof Element
+            ? beforeNode.previousElementSibling
+            : htmlSec.lastElementChild;
+        if (
+          txt.indexOf("\n") >= 0 &&
+          previous &&
+          previous.classList.contains(outputScrollClass) &&
+          previous.classList.contains(standardOutputClass) ==
+            (outputMode === "standard")
+        )
+          return previous as HTMLElement;
+        return htmlSec;
+      }
       return outputScrollContainer(
         htmlSec,
         inputSpan && inputSpan.parentElement == htmlSec ? inputSpan : null,
