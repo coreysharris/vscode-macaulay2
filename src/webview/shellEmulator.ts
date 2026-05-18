@@ -354,7 +354,19 @@ const Shell = function (
     if (retries <= 0) return;
     setTimeout(() => initializeVectorGraphics(container, retries - 1), 25);
   };
-  const renderMathInHtml = function (container: HTMLElement) {
+  const defaultMathIgnoredTags = [
+    "script",
+    "noscript",
+    "style",
+    "textarea",
+    "pre",
+    "code",
+    "option",
+  ];
+  const renderMathInElement = function (
+    container: HTMLElement | Element,
+    ignoredTags: string[],
+  ) {
     const renderMath = (window as any).renderMathInElement;
     if (typeof renderMath != "function") return;
 
@@ -365,22 +377,20 @@ const Shell = function (
         // Dense Macaulay2 output can contain thousands of thin-space macros.
         maxExpand: 100000,
         delimiters: [{ left: "$", right: "$", display: false }],
-        ignoredTags: [
-          "script",
-          "noscript",
-          "style",
-          "textarea",
-          "pre",
-          "code",
-          "option",
-          // SVG output is already structured markup, not TeX-bearing prose.
-          "svg",
-          "foreignobject",
-        ],
+        ignoredTags,
       });
     } catch (err) {
       console.warn("Could not render Macaulay2 output math", err);
     }
+  };
+  const renderMathInHtml = function (container: HTMLElement) {
+    // SVG output is already structured markup, not TeX-bearing prose.
+    renderMathInElement(container, defaultMathIgnoredTags.concat(["svg"]));
+    // VectorGraphics uses foreignObject text for axis labels such as $x$ and
+    // $y$, so render just those HTML islands inside the skipped SVG trees.
+    container
+      .querySelectorAll("svg foreignObject, svg foreignobject")
+      .forEach((el) => renderMathInElement(el, defaultMathIgnoredTags));
   };
   const inputSwitchesToStandardMode = function (txt: string) {
     return /(?:^|[;\n])\s*topLevelMode\s*=\s*Standard\s*(?:;|$)/.test(txt);
