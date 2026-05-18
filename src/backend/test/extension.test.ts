@@ -29,7 +29,6 @@ import {
   outputHasWebAppPromptAfterSubmittedInput,
   splitM2OutputForWebview,
 } from "../repl";
-import { applyWordsToPetProgress, getPetMood } from "../pet";
 
 // You can import and use all API from the 'vscode' module
 // as well as import your extension to test it
@@ -272,25 +271,6 @@ suite("Executable Launch", function () {
           "--silent",
         ],
       },
-    );
-  });
-});
-
-suite("Macaulay2 Pet", function () {
-  test("gets sad after enough idle time", function () {
-    assert.equal(getPetMood(0), "happy");
-    assert.equal(getPetMood(9000), "content");
-    assert.equal(getPetMood(21000), "sad");
-  });
-
-  test("levels up after powers of ten words", function () {
-    assert.deepEqual(
-      applyWordsToPetProgress({ level: 1, wordsTowardNextLevel: 9 }, 1),
-      { level: 2, wordsTowardNextLevel: 0 },
-    );
-    assert.deepEqual(
-      applyWordsToPetProgress({ level: 2, wordsTowardNextLevel: 99 }, 3),
-      { level: 3, wordsTowardNextLevel: 2 },
     );
   });
 });

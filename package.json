@@ -147,12 +147,6 @@
 					"default": true,
 					"description": "Enable Ctrl+C as an interrupt shortcut in the Macaulay2 REPL webview on macOS. The interrupt command remains available for custom keybindings when this is disabled.",
 					"scope": "application"
-				},
-				"macaulay2.enablePet": {
-					"type": "boolean",
-					"default": true,
-					"description": "Show a small persistent Macaulay2 pet after the active editor line.",
-					"scope": "application"
 				}
 			}
 		},
