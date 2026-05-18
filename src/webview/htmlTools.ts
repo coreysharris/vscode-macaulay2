@@ -198,7 +198,8 @@ const setCaretAtEndMaybe = function (el, flag?) {
 
 const attachElement = function (el, container) {
   // move an HTML element (with single text node) while preserving focus/caret
-  const caret = getCaret(el);
+  const caret =
+    document.hasFocus() && document.activeElement == el ? getCaret(el) : null;
   container.appendChild(el);
   if (caret !== null)
     // note that it could be zero

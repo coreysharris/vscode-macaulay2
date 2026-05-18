@@ -105,6 +105,16 @@ suite("Executable Launch", function () {
     ]);
   });
 
+  test("builds webview process args for Standard top-level output", function () {
+    assert.deepEqual(getM2WebviewProcessArgs("startupPatch", "standard"), [
+      "--webapp",
+      "-e",
+      "startupPatch",
+      "-e",
+      "topLevelMode = Standard",
+    ]);
+  });
+
   test("builds terminal process args with extension startup patch", function () {
     assert.deepEqual(getM2TerminalProcessArgs("startupPatch"), [
       "-e",

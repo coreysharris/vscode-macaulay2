@@ -50,8 +50,13 @@ There is no REPL target setting. To change where evaluation goes by default, reb
 | `macaulay2.executablePath` | `""` | Optional path to the `M2` executable. Leave empty to auto-detect. |
 | `macaulay2.launchArgs` | `""` | Additional command-line arguments passed to `M2` when starting REPL sessions, for example `--print-width 50`. |
 | `macaulay2.webviewColorTheme` | `vscode` | Choose the webview REPL color theme: `classic`, `light`, `dark`, or `vscode`. |
+| `macaulay2.webviewTopLevelMode` | `webapp` | Choose the webview REPL top-level output mode: `webapp` or `standard`. |
 | `macaulay2.interruptOnControlC` | `true` | Enable `Ctrl+C` as a webview interrupt shortcut on macOS. |
 
 ## Requirements
 
 A working Macaulay2 installation is required for the REPL and code evaluation features. Editing support, syntax highlighting, and completions work when the extension is installed, but running code requires `M2`.
+
+## Acknowledgements 
+
+This package was developed by John Cobb, Paul Zinn-Justin, and Mike Stillman, and was built off of Corey Harris's version.

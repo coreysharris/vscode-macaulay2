@@ -125,6 +125,20 @@
 					"description": "Controls the color theme used by the Macaulay2 webview REPL.",
 					"scope": "window"
 				},
+				"macaulay2.webviewTopLevelMode": {
+					"type": "string",
+					"default": "webapp",
+					"enum": [
+						"webapp",
+						"standard"
+					],
+					"enumDescriptions": [
+						"Start the webview REPL in Macaulay2 WebApp output mode.",
+						"Start the webview REPL with `topLevelMode = Standard`."
+					],
+					"description": "Controls the top-level output mode used by the Macaulay2 webview REPL.",
+					"scope": "window"
+				},
 				"macaulay2.interruptOnControlC": {
 					"type": "boolean",
 					"default": true,

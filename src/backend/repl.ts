@@ -27,6 +27,7 @@ type WebviewCompletionItem = {
   kind: string;
 };
 type WebviewColorTheme = "classic" | "light" | "dark" | "vscode";
+type WebviewTopLevelMode = "webapp" | "standard";
 
 type HelpPanelState = {
   panel: vscode.WebviewPanel;
@@ -99,8 +100,13 @@ function getM2StartupExpression(): string {
   return getM2StartupPatch();
 }
 
-export function getM2WebviewProcessArgs(startupExpression: string): string[] {
-  return ["--webapp", "-e", startupExpression];
+export function getM2WebviewProcessArgs(
+  startupExpression: string,
+  topLevelMode: WebviewTopLevelMode = "webapp",
+): string[] {
+  const args = ["--webapp", "-e", startupExpression];
+  if (topLevelMode === "standard") args.push("-e", "topLevelMode = Standard");
+  return args;
 }
 
 export function getM2TerminalProcessArgs(startupExpression: string): string[] {
@@ -122,6 +128,13 @@ function getWebviewColorTheme(): WebviewColorTheme {
     configuredTheme === "classic"
     ? configuredTheme
     : "vscode";
+}
+
+function getWebviewTopLevelMode(): WebviewTopLevelMode {
+  const configuredMode = vscode.workspace
+    .getConfiguration("macaulay2")
+    .get<string>("webviewTopLevelMode", "webapp");
+  return configuredMode === "standard" ? "standard" : "webapp";
 }
 
 function postWebviewSettings() {
@@ -209,7 +222,7 @@ function startM2() {
   const workingDir = getM2WorkingDir();
   const launch = getM2LaunchConfiguration(
     resolution,
-    getM2WebviewProcessArgs(getM2StartupExpression()),
+    getM2WebviewProcessArgs(getM2StartupExpression(), getWebviewTopLevelMode()),
     workingDir,
     getM2LaunchArgs(),
   );
@@ -313,7 +326,11 @@ async function startREPL(preserveFocus: boolean) {
   }
 }
 
-async function executeCode(text: string, restoreEditorFocus = false) {
+async function executeCode(
+  text: string,
+  restoreEditorFocus = false,
+  recordSubmittedInput = false,
+) {
   const editorToRestore = restoreEditorFocus
     ? vscode.window.activeTextEditor
     : undefined;
@@ -323,6 +340,12 @@ async function executeCode(text: string, restoreEditorFocus = false) {
   if (proc && proc.stdin) {
     shouldRestoreEditorFocusAfterWebviewOutput = restoreEditorFocus;
     editorToRestoreAfterWebviewOutput = editorToRestore;
+    if (recordSubmittedInput && g_panel) {
+      await g_panel.webview.postMessage({
+        type: "submittedInput",
+        data: text,
+      });
+    }
     proc.stdin.write(text);
   } else {
     vscode.window.showErrorMessage("Macaulay2 process is not running.");
@@ -454,13 +477,13 @@ function executeSelectionInTerminal() {
   });
 }
 
-function executeSelectionInWebview() {
+async function executeSelectionInWebview() {
   const text = getSelectedM2Code();
   if (text === undefined) {
     return;
   }
 
-  executeCode(text, true);
+  await executeCode(text, true, true);
   vscode.commands.executeCommand("cursorMove", {
     to: "down",
     by: "line",

@@ -564,6 +564,15 @@ const Shell = function (
     emit("input", clean + "\n");
   };
 
+  obj.recordSubmittedInput = function (msg) {
+    if (!inputFollowsStandardPrompt()) return;
+    const clean = sanitizeInput(msg);
+    if (clean.length == 0) return;
+    appendSubmittedInput(clean);
+    inputSpan.textContent = "";
+    scrollDownLeft(terminal);
+  };
+
   const focusElement = function () {
     const foc = window.getSelection().focusNode;
     return foc && foc.nodeType == 3 ? foc.parentElement : foc;
@@ -1232,6 +1241,10 @@ const Shell = function (
 
   obj.reset = function () {
     console.log("Reset");
+    leaveStandardMode();
+    pendingErrorOutput = "";
+    if (procInputSpan !== null) procInputSpan.remove();
+    procInputSpan = null;
     emit("reset");
     createInputEl(); // recreate the input area
     interpreterDepth = 1;
