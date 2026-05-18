@@ -5,6 +5,11 @@
 
 // The module 'assert' provides assertion methods from node
 import * as assert from "assert";
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
+
+import { spawnSync } from "child_process";
 
 import {
   formatM2ExecutablePathForStatusBar,
@@ -12,8 +17,11 @@ import {
   getM2ExecutableStatusText,
 } from "../executableSwitcher";
 import {
+  getM2ExecutableResolutionDetail,
   getM2LaunchConfiguration,
+  M2ExecutableResolution,
   normalizeM2LaunchArgs,
+  resolveM2Executable,
   windowsPathToWslPath,
 } from "../executablePath";
 import {
@@ -26,6 +34,97 @@ import {
 // as well as import your extension to test it
 // import * as vscode from 'vscode';
 // import * as myExtension from '../extension';
+
+const M2_PATCH_COMPATIBILITY_SENTINEL = "PATCH_CONTRACT_OK";
+
+function getM2StartupPatchCompatibilityScript(): string {
+  return [
+    getM2StartupPatch(),
+    'fetchAny = value ((Core#"private dictionary")#"fetchAnyRawDocumentation")',
+    "rawdoc = fetchAny makeDocumentTag hilbertFunction",
+    "assert(rawdoc =!= null)",
+    "rawtag = rawdoc.DocumentTag",
+    'rawTable = (package rawtag)#"raw documentation"',
+    "fkey = format rawtag",
+    "had = rawTable#?fkey",
+    "if had then oldRawDoc = rawTable#fkey",
+    'oldDocumentTag = value ((Core#"private dictionary")#"currentDocumentTag")',
+    "renderedTopHelp = vscodeM2ExtensionTopHelp makeDocumentTag hilbertFunction",
+    'assert(value ((Core#"private dictionary")#"currentDocumentTag") === oldDocumentTag)',
+    "if had then assert(rawTable#fkey === oldRawDoc) else assert(not rawTable#?fkey)",
+    'filePositionHtml = html new FilePosition from ("stdio", 1, 1)',
+    'assert(filePositionHtml === "<samp><a href=\\"stdio#L1:C1\\">stdio:1:1</a></samp>")',
+    'assert(texMath Type === "\\\\texttt{Type}")',
+    'assert(match("-- code for method:", toString code hilbertFunction))',
+    `print "${M2_PATCH_COMPATIBILITY_SENTINEL}"`,
+  ].join("\n");
+}
+
+function writeTemporaryM2Script(contents: string): string {
+  const directory = fs.mkdtempSync(
+    path.join(os.tmpdir(), "vscode-macaulay2-"),
+  );
+  const scriptPath = path.join(directory, "startup-patch-compatibility.m2");
+  fs.writeFileSync(scriptPath, contents, "utf8");
+  return scriptPath;
+}
+
+function removeTemporaryM2Script(scriptPath: string) {
+  try {
+    fs.unlinkSync(scriptPath);
+    fs.rmdirSync(path.dirname(scriptPath));
+  } catch {
+    // Best effort cleanup only.
+  }
+}
+
+function getM2ScriptInvocation(
+  resolution: M2ExecutableResolution,
+  scriptPath: string,
+): { executablePath: string; args: string[] } {
+  if (resolution.wslExecutablePath) {
+    return {
+      executablePath: resolution.executablePath,
+      args: [
+        "--exec",
+        resolution.wslExecutablePath,
+        "--script",
+        windowsPathToWslPath(scriptPath),
+      ],
+    };
+  }
+
+  return {
+    executablePath: resolution.executablePath,
+    args: ["--script", scriptPath],
+  };
+}
+
+function runM2Script(
+  resolution: M2ExecutableResolution,
+  script: string,
+): { stdout: string; stderr: string; status: number | null } {
+  const scriptPath = writeTemporaryM2Script(script);
+  try {
+    const invocation = getM2ScriptInvocation(resolution, scriptPath);
+    const result = spawnSync(invocation.executablePath, invocation.args, {
+      encoding: "utf8",
+      maxBuffer: 1024 * 1024,
+    });
+
+    if (result.error) {
+      throw result.error;
+    }
+
+    return {
+      stdout: result.stdout || "",
+      stderr: result.stderr || "",
+      status: result.status,
+    };
+  } finally {
+    removeTemporaryM2Script(scriptPath);
+  }
+}
 
 // Defines a Mocha test suite to group tests of similar kind together
 suite("Extension Tests", function () {
@@ -95,6 +194,38 @@ suite("Executable Launch", function () {
       -1,
     );
     assert.notEqual(patch.indexOf("if #m > 0 then code m"), -1);
+  });
+
+  test("startup patch works against the installed Macaulay2 runtime", function () {
+    this.timeout(20000);
+
+    const resolution = resolveM2Executable();
+    if (!resolution) {
+      this.skip();
+      return;
+    }
+
+    const result = runM2Script(
+      resolution,
+      getM2StartupPatchCompatibilityScript(),
+    );
+    const invocationDetail = getM2ExecutableResolutionDetail(resolution);
+
+    assert.equal(
+      result.status,
+      0,
+      `M2 startup patch compatibility check failed for ${invocationDetail}.\nSTDOUT:\n${result.stdout}\nSTDERR:\n${result.stderr}`,
+    );
+    assert.equal(
+      result.stderr.indexOf("warning: VS Code"),
+      -1,
+      `M2 startup patch emitted a VS Code compatibility warning for ${invocationDetail}.\nSTDERR:\n${result.stderr}`,
+    );
+    assert.notEqual(
+      result.stdout.indexOf(M2_PATCH_COMPATIBILITY_SENTINEL),
+      -1,
+      `M2 startup patch did not complete its compatibility assertions for ${invocationDetail}.\nSTDOUT:\n${result.stdout}\nSTDERR:\n${result.stderr}`,
+    );
   });
 
   test("builds webview process args for WebApp output", function () {

@@ -18,6 +18,7 @@ let g_getWebviewCompletionItems:
   | (() => Promise<WebviewCompletionItem[]>)
   | undefined;
 let proc: ChildProcess | undefined;
+let startReplPromise: Promise<void> | undefined;
 let procWorkingDir: string | undefined;
 let shouldRestoreEditorFocusAfterWebviewOutput = false;
 let editorToRestoreAfterWebviewOutput: vscode.TextEditor | undefined;
@@ -306,12 +307,32 @@ function startREPLCommand() {
 }
 
 async function startREPL(preserveFocus: boolean) {
-  if (proc === undefined) {
-    // Create or show the webview panel
+  if (proc !== undefined) {
+    return;
+  }
+
+  if (startReplPromise) {
+    await startReplPromise;
+    return;
+  }
+
+  startReplPromise = startREPLOnce(preserveFocus).finally(() => {
+    startReplPromise = undefined;
+  });
+  await startReplPromise;
+}
+
+async function startREPLOnce(preserveFocus: boolean) {
+  if (proc !== undefined) {
+    return;
+  }
+
+  // Create the webview panel before starting M2 so process output has a target.
+  if (g_panel === undefined) {
+    const completionItems = g_getWebviewCompletionItems
+      ? await g_getWebviewCompletionItems()
+      : [];
     if (g_panel === undefined) {
-      const completionItems = g_getWebviewCompletionItems
-        ? await g_getWebviewCompletionItems()
-        : [];
       g_panel = vscode.window.createWebviewPanel(
         "macaulay2Output",
         "Macaulay2 Output",
@@ -341,6 +362,9 @@ async function startREPL(preserveFocus: boolean) {
         }
       });
     }
+  }
+
+  if (proc === undefined) {
     startM2();
   }
 }
