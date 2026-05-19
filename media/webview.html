@@ -137,12 +137,12 @@
       #terminal {
         background: var(--m2-background);
         color: var(--m2-foreground);
-        height: 100vh;
-        max-height: 100vh;
-        max-width: 100vw;
+        height: 100%;
+        max-height: 100%;
+        max-width: 100%;
         overflow-x: hidden;
         overflow-y: auto;
-        width: 100vw;
+        width: 100%;
       }
 
       .M2Cell {
@@ -156,10 +156,16 @@
         max-width: 100%;
       }
 
+      .M2Input:not(.M2CurrentInput),
+      .M2CurrentInput:not(:empty) {
+        display: inline;
+      }
+
       .M2PastInput,
       .M2CurrentInput {
         overflow-wrap: anywhere;
         white-space: pre-wrap;
+        word-break: break-word;
         z-index: 2;
       }
 
@@ -174,6 +180,37 @@
 
       .M2OutputScroll > .M2Html {
         max-width: none;
+      }
+
+      .M2OutputScroll > .M2Html:has(code, pre, samp, span.tt, tt) {
+        display: inline;
+        max-width: 100%;
+        white-space: normal;
+      }
+
+      .M2OutputScroll code,
+      .M2OutputScroll pre,
+      .M2OutputScroll samp,
+      .M2OutputScroll span.tt,
+      .M2OutputScroll tt {
+        overflow-wrap: anywhere;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+
+      .M2OutputScroll code.block,
+      .M2OutputScroll pre > code {
+        box-sizing: border-box;
+        max-width: 100%;
+        width: auto;
+      }
+
+      .M2OutputScroll code .token.net,
+      .M2OutputScroll code .token.string {
+        display: inline;
+        overflow-wrap: inherit;
+        white-space: inherit;
+        word-break: inherit;
       }
 
       .M2OutputScroll.M2StandardOutput {
