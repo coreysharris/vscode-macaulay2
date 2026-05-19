@@ -39,6 +39,11 @@
 				"title": "Send Line or Selection to Macaulay2 Terminal"
 			},
 			{
+				"command": "macaulay2.runFile",
+				"title": "Run Macaulay2 File",
+				"icon": "$(play)"
+			},
+			{
 				"command": "macaulay2.interruptREPL",
 				"title": "Interrupt M2 Computation"
 			},
@@ -151,7 +156,7 @@
 				"when": "editorTextFocus && editorLangId == macaulay2"
 			},
 			{
-				"command": "macaulay2.sendToTerminal",
+				"command": "macaulay2.sendToWebview",
 				"key": "ctrl+enter",
 				"when": "editorTextFocus && editorLangId == macaulay2"
 			},
@@ -185,11 +190,12 @@
 					{
 						"id": "sendCode",
 						"title": "Send Code",
-						"description": "Send selected code to the webview REPL with `Shift+Enter` or to the terminal REPL with `Ctrl+Enter`.\n\n[Open Example File](command:macaulay2.openGettingStartedExample)",
+						"description": "Send selected code to the webview REPL with `Shift+Enter` or `Ctrl+Enter`, or run the whole file from the button in the top right. \n\n[Open Example File](command:macaulay2.openGettingStartedExample)",
 						"media": {
 							"markdown": "walkthroughs/send-code.md"
 						},
 						"completionEvents": [
+							"onCommand:macaulay2.runFile",
 							"onCommand:macaulay2.sendToWebview",
 							"onCommand:macaulay2.sendToTerminal"
 						]
@@ -210,6 +216,13 @@
 			}
 		],
 		"menus": {
+			"editor/title": [
+				{
+					"command": "macaulay2.runFile",
+					"when": "resourceLangId == macaulay2",
+					"group": "navigation@1"
+				}
+			],
 			"editor/context": [
 				{
 					"command": "macaulay2.sendToTerminal",

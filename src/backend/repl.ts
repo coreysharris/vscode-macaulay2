@@ -540,6 +540,26 @@ async function executeSelectionInWebview() {
   });
 }
 
+async function executeFileInWebview(resource?: vscode.Uri) {
+  const document = resource
+    ? vscode.workspace.textDocuments.find(
+        (textDocument) => textDocument.uri.toString() === resource.toString(),
+      ) || (await vscode.workspace.openTextDocument(resource))
+    : vscode.window.activeTextEditor?.document;
+
+  if (!document) {
+    vscode.window.showErrorMessage("Open a Macaulay2 file to run it.");
+    return;
+  }
+
+  if (document.languageId !== "macaulay2") {
+    vscode.window.showErrorMessage("Open a Macaulay2 file to run it.");
+    return;
+  }
+
+  await executeCode(document.getText(), true, true);
+}
+
 function getWebviewContent(
   webview: vscode.Webview,
   completionItems: WebviewCompletionItem[],
@@ -1231,6 +1251,9 @@ export function activate(
       "macaulay2.sendToWebview",
       executeSelectionInWebview,
     ),
+  );
+  context.subscriptions.push(
+    vscode.commands.registerCommand("macaulay2.runFile", executeFileInWebview),
   );
   context.subscriptions.push(
     vscode.commands.registerCommand(

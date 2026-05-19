@@ -19,7 +19,7 @@ Install Macaulay2 first, then open a `.m2` file in VS Code. The extension will t
 
 VS Code shows a short **Get Started with Macaulay2** walkthrough after installation, and it remains available from the Getting Started page.
 
-Use `F12` or run **Macaulay2: Start M2 REPL** from the Command Palette to start the webview REPL. Use `Shift+Enter` to send the current selection, or the current line when nothing is selected, to the webview REPL. Use `Ctrl+Enter` to send the same text to a Macaulay2 terminal session instead. Both send commands are also available from the right-click editor menu in `.m2` files and can be rebound in VS Code Keyboard Shortcuts.
+Use `F12` or run **Macaulay2: Start M2 REPL** from the Command Palette to start the webview REPL. Use `Shift+Enter` or `Ctrl+Enter` to send the current selection, or the current line when nothing is selected, to the webview REPL. Use the run button in the editor title area of a `.m2` file to send the whole file to the webview REPL. Sending code to a Macaulay2 terminal session remains available from the Command Palette and right-click editor menu, but has no default keybinding. Both send commands can be rebound in VS Code Keyboard Shortcuts.
 
 - Optional executable switcher. Set `macaulay2.showExecutableSwitcher` to `true` and add paths to `macaulay2.executablePathAlternatives` to show a status bar button for switching between M2 binaries.
 
@@ -32,6 +32,7 @@ If the extension cannot find Macaulay2, set `macaulay2.executablePath` to the fu
 | --- | --- |
 | `Macaulay2: Start M2 REPL` | Start the integrated webview REPL. |
 | `Macaulay2: Send Line or Selection to Macaulay2 Webview` | Send the current selection or line directly to the webview REPL. |
+| `Macaulay2: Run Macaulay2 File` | Send the active Macaulay2 file to the webview REPL. |
 | `Macaulay2: Start M2 Terminal` | Start Macaulay2 in a VS Code terminal. |
 | `Macaulay2: Send Line or Selection to Macaulay2 Terminal` | Send the current selection or line directly to the terminal REPL. |
 | `Macaulay2: Interrupt M2 Computation` | Interrupt the running Macaulay2 computation. |
@@ -41,10 +42,10 @@ If the extension cannot find Macaulay2, set `macaulay2.executablePath` to the fu
 | Keybinding | Command |
 | --- | --- |
 | `Shift+Enter` | Send the current selection or line to the webview REPL. |
-| `Ctrl+Enter` | Send the current selection or line to the terminal REPL. |
+| `Ctrl+Enter` | Send the current selection or line to the webview REPL. |
 | `Ctrl+C` | Interrupt the running Macaulay2 computation when the webview REPL is active. |
 
-There is no REPL target setting. To change where evaluation goes by default, rebind these explicit webview and terminal commands in VS Code Keyboard Shortcuts. The interrupt shortcut is also controlled through VS Code Keyboard Shortcuts.
+There is no REPL target setting. To send evaluation to the terminal from a keybinding, bind `Macaulay2: Send Line or Selection to Macaulay2 Terminal` in VS Code Keyboard Shortcuts. The interrupt shortcut is also controlled through VS Code Keyboard Shortcuts.
 
 ## Settings
 
