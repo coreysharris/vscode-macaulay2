@@ -16,6 +16,7 @@
 	],
 	"activationEvents": [
 		"onLanguage:macaulay2",
+		"onCommand:macaulay2.openGettingStartedExample",
 		"onStartupFinished"
 	],
 	"main": "./out/extension.js",
@@ -89,7 +90,7 @@
 					"type": "string",
 					"default": "",
 					"description": "Additional command-line arguments passed to M2 when starting REPL sessions.",
-					"markdownDescription": "Additional command-line arguments passed to M2 when starting REPL sessions, for example `--print-width 50`.",
+					"markdownDescription": "Additional command-line arguments passed to M2 when starting REPL sessions, for example `--print-width 50`. Note: Some display changes commands will not affect the webview REPL.",
 					"scope": "window"
 				},
 				"macaulay2.executablePathAlternatives": {
@@ -138,12 +139,6 @@
 					],
 					"description": "Controls the top-level output mode used by the Macaulay2 webview REPL.",
 					"scope": "window"
-				},
-				"macaulay2.interruptOnControlC": {
-					"type": "boolean",
-					"default": true,
-					"description": "Enable Ctrl+C as an interrupt shortcut in the Macaulay2 REPL webview on macOS. The interrupt command remains available for custom keybindings when this is disabled.",
-					"scope": "application"
 				}
 			}
 		},
@@ -165,7 +160,52 @@
 			{
 				"command": "macaulay2.interruptREPL",
 				"key": "ctrl+c",
-				"when": "isMac && config.macaulay2.interruptOnControlC && activeWebviewPanelId == 'macaulay2Output'"
+				"when": "activeWebviewPanelId == 'macaulay2Output'"
+			}
+		],
+		"walkthroughs": [
+			{
+				"id": "gettingStarted",
+				"title": "Get Started with Macaulay2",
+				"description": "Start a Macaulay2 REPL, send code from `.m2` files, and configure the extension.",
+				"steps": [
+					{
+						"id": "startRepl",
+						"title": "Start a REPL",
+						"description": "Open a Macaulay2 REPL in either the webview or a terminal.\n\n[Start M2 REPL](command:macaulay2.startREPL)\n\n[Start M2 Terminal](command:macaulay2.startTerminal)\n\nIf the extension failed to find your Macaulay2 executable automatically, you can configure the path here: \n\n[Select M2 Executable](command:macaulay2.selectExecutablePath)",
+						"media": {
+							"markdown": "walkthroughs/start-repl.md"
+						},
+						"completionEvents": [
+							"onCommand:macaulay2.startREPL",
+							"onCommand:macaulay2.startTerminal"
+						]
+					},
+					{
+						"id": "sendCode",
+						"title": "Send Code",
+						"description": "Send selected code to the webview REPL with `Shift+Enter` or to the terminal REPL with `Ctrl+Enter`.\n\n[Open Example File](command:macaulay2.openGettingStartedExample)",
+						"media": {
+							"markdown": "walkthroughs/send-code.md"
+						},
+						"completionEvents": [
+							"onCommand:macaulay2.sendToWebview",
+							"onCommand:macaulay2.sendToTerminal"
+						]
+					},
+					{
+						"id": "configureM2",
+						"title": "Configure Extension",
+						"description": "You can change the start up behavior, visual theme, and other settings in the settings.\n\n[Open Macaulay2 Settings](command:workbench.action.openSettings?%5B%22%40ext%3AM2.macaulay2%22%5D)\n\nAll keybindings can be viewed and edited.\n\n[Open Macaulay2 Keyboard Shortcuts](command:workbench.action.openGlobalKeybindings?%5B%22%40ext%3Am2.macaulay2%22%5D)",
+						"media": {
+							"markdown": "walkthroughs/configure-m2.md"
+						},
+						"completionEvents": [
+							"onCommand:macaulay2.selectExecutablePath",
+							"onSettingChanged:macaulay2.executablePath"
+						]
+					}
+				]
 			}
 		],
 		"menus": {

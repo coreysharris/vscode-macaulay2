@@ -17,6 +17,8 @@ This extension adds language support for [Macaulay2](https://macaulay2.com/) to 
 
 Install Macaulay2 first, then open a `.m2` file in VS Code. The extension will try to find the `M2` executable automatically.
 
+VS Code shows a short **Get Started with Macaulay2** walkthrough after installation, and it remains available from the Getting Started page.
+
 Use `F12` or run **Macaulay2: Start M2 REPL** from the Command Palette to start the webview REPL. Use `Shift+Enter` to send the current selection, or the current line when nothing is selected, to the webview REPL. Use `Ctrl+Enter` to send the same text to a Macaulay2 terminal session instead. Both send commands are also available from the right-click editor menu in `.m2` files and can be rebound in VS Code Keyboard Shortcuts.
 
 - Optional executable switcher. Set `macaulay2.showExecutableSwitcher` to `true` and add paths to `macaulay2.executablePathAlternatives` to show a status bar button for switching between M2 binaries.
@@ -40,8 +42,9 @@ If the extension cannot find Macaulay2, set `macaulay2.executablePath` to the fu
 | --- | --- |
 | `Shift+Enter` | Send the current selection or line to the webview REPL. |
 | `Ctrl+Enter` | Send the current selection or line to the terminal REPL. |
+| `Ctrl+C` | Interrupt the running Macaulay2 computation when the webview REPL is active. |
 
-There is no REPL target setting. To change where evaluation goes by default, rebind these explicit webview and terminal commands in VS Code Keyboard Shortcuts.
+There is no REPL target setting. To change where evaluation goes by default, rebind these explicit webview and terminal commands in VS Code Keyboard Shortcuts. The interrupt shortcut is also controlled through VS Code Keyboard Shortcuts.
 
 ## Settings
 
@@ -51,7 +54,6 @@ There is no REPL target setting. To change where evaluation goes by default, reb
 | `macaulay2.launchArgs` | `""` | Additional command-line arguments passed to `M2` when starting REPL sessions, for example `--print-width 50`. |
 | `macaulay2.webviewColorTheme` | `vscode` | Choose the webview REPL color theme: `classic`, `light`, `dark`, or `vscode`. |
 | `macaulay2.webviewTopLevelMode` | `webapp` | Choose the webview REPL top-level output mode: `webapp` or `standard`. |
-| `macaulay2.interruptOnControlC` | `true` | Enable `Ctrl+C` as a webview interrupt shortcut on macOS. |
 
 ## Requirements
 
@@ -59,4 +61,4 @@ A working Macaulay2 installation is required for the REPL and code evaluation fe
 
 ## Acknowledgements 
 
-This package was developed by John Cobb, Paul Zinn-Justin, and Mike Stillman, and was built off of Corey Harris's version.
+This package was developed by John Cobb, Mike Stillman, Corey Harris, and Paul Zinn-Justin.

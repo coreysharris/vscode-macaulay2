@@ -70,6 +70,19 @@ export function activate(context: vscode.ExtensionContext) {
       }
     }),
   );
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "macaulay2.openGettingStartedExample",
+      () => {
+        const exampleUri = vscode.Uri.joinPath(
+          context.extensionUri,
+          "examples",
+          "getting-started.m2",
+        );
+        return vscode.commands.executeCommand("vscode.open", exampleUri);
+      },
+    ),
+  );
 
   repl.activate(context, getWebviewCompletionItems);
 
