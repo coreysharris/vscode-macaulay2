@@ -203,7 +203,7 @@
 					{
 						"id": "configureM2",
 						"title": "Configure Extension",
-						"description": "You can change the start up behavior, visual theme, and other settings in the settings.\n\n[Open Macaulay2 Settings](command:workbench.action.openSettings?%5B%22%40ext%3AM2.macaulay2%22%5D)\n\nAll keybindings can be viewed and edited.\n\n[Open Macaulay2 Keyboard Shortcuts](command:workbench.action.openGlobalKeybindings?%5B%22%40ext%3Am2.macaulay2%22%5D)",
+						"description": "You can change the start up behavior, visual theme, and other settings.\n\n[Open Macaulay2 Settings](command:workbench.action.openSettings?%5B%22%40ext%3AM2.macaulay2%22%5D)\n\nAll keybindings can be viewed and edited.\n\n[Open Macaulay2 Keyboard Shortcuts](command:workbench.action.openGlobalKeybindings?%5B%22%40ext%3Am2.macaulay2%22%5D)",
 						"media": {
 							"markdown": "walkthroughs/configure-m2.md"
 						},
