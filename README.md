@@ -5,6 +5,7 @@ This extension adds language support for [Macaulay2](https://macaulay2.com/) to 
 ## Features
 
 - Syntax highlighting for Macaulay2 source files and fenced Macaulay2 code blocks in Markdown.
+- Document formatting for `.m2` files through VS Code's standard **Format Document** command.
 - Completion suggestions for Macaulay2 symbols, functions, constants, and keywords.
 - Language configuration for comments, brackets, quotes, and surrounding pairs.
 - An integrated Macaulay2 REPL in a VS Code webview.

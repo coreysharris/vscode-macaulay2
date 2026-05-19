@@ -29,6 +29,7 @@ import {
   getM2TerminalProcessArgs,
   getM2WebviewProcessArgs,
 } from "../repl";
+import { formatMacaulay2Text } from "../formatter";
 
 // You can import and use all API from the 'vscode' module
 // as well as import your extension to test it
@@ -132,6 +133,65 @@ suite("Extension Tests", function () {
   test("Something 1", function () {
     assert.equal(-1, [1, 2, 3].indexOf(5));
     assert.equal(-1, [1, 2, 3].indexOf(0));
+  });
+});
+
+suite("Macaulay2 Formatter", function () {
+  test("formats indentation and lightweight whitespace conventions", function () {
+    const input = [
+      "C=apply(F,C,(f,c)->Polygon{apply(f,j->V#j),   ",
+      "\tAnimMatrix=>apply(steps,j->rotation(j,c,c)),",
+      '\t"fill"=>concatenate("rgb(",toString(1),",",toString(2),")")});--press',
+      "",
+    ].join("\n");
+
+    assert.equal(
+      formatMacaulay2Text(input, { tabSize: 4 }),
+      [
+        "C = apply(F, C, (f, c) -> Polygon{apply(f, j -> V#j),",
+        "        AnimMatrix => apply(steps, j -> rotation(j, c, c)),",
+        '        "fill" => concatenate("rgb(", toString(1), ",", toString(2), ")")}); -- press',
+        "",
+      ].join("\n"),
+    );
+  });
+
+  test("preserves strings and block comments", function () {
+    const input = [
+      'x="a,b;c=>d--e"',
+      "-*raw,block=>comment*-",
+      "y=1--comment",
+    ].join("\n");
+
+    assert.equal(
+      formatMacaulay2Text(input, { tabSize: 2 }),
+      ['x = "a,b;c=>d--e"', "-*raw,block=>comment*-", "y = 1 -- comment"].join(
+        "\n",
+      ) + "\n",
+    );
+  });
+
+  test("does not rewrite documentation blocks", function () {
+    const input = ["///", "x=1--not code", "///", "z=1"].join("\n");
+
+    assert.equal(
+      formatMacaulay2Text(input, { tabSize: 2 }),
+      ["///", "x=1--not code", "///", "z = 1", ""].join("\n"),
+    );
+  });
+
+  test("dedents leading closing delimiters", function () {
+    const input = ["x={", "{1,2},", "{3,4}", "}"].join("\n");
+
+    assert.equal(
+      formatMacaulay2Text(input, { tabSize: 2 }),
+      ["x = {", "  {1, 2},", "  {3, 4}", "}", ""].join("\n"),
+    );
+  });
+
+  test("trims trailing empty lines at end of file", function () {
+    assert.equal(formatMacaulay2Text("x=1\n\n  \n"), "x = 1\n");
+    assert.equal(formatMacaulay2Text("\n\n"), "");
   });
 });
 
