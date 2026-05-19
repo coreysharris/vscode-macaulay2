@@ -2,7 +2,7 @@
 	"name": "macaulay2",
 	"displayName": "Macaulay2",
 	"description": "Macaulay2 language support",
-	"version": "0.7.0",
+	"version": "0.8.0",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/Macaulay2/vscode-macaulay2"
@@ -72,7 +72,9 @@
 					"macaulay2"
 				],
 				"extensions": [
-					".m2"
+					".m2",
+					".d",
+					".dd"
 				],
 				"configuration": "./language-configuration.json"
 			}
@@ -172,13 +174,12 @@
 					{
 						"id": "startRepl",
 						"title": "Start a REPL",
-						"description": "Open a Macaulay2 REPL in either the webview or a terminal.\n\n[Start M2 REPL](command:macaulay2.startREPL)\n\n[Start M2 Terminal](command:macaulay2.startTerminal)\n\nIf the extension failed to find your Macaulay2 executable automatically, you can configure the path here: \n\n[Select M2 Executable](command:macaulay2.selectExecutablePath)",
+						"description": "Open a Macaulay2 REPL in either the webview or a terminal.\n\n[Start M2 REPL](command:macaulay2.startREPL)\n\nIf the extension failed to find your Macaulay2 executable automatically, you can configure the path here: \n\n[Select M2 Executable](command:macaulay2.selectExecutablePath)",
 						"media": {
 							"markdown": "walkthroughs/start-repl.md"
 						},
 						"completionEvents": [
-							"onCommand:macaulay2.startREPL",
-							"onCommand:macaulay2.startTerminal"
+							"onCommand:macaulay2.startREPL"
 						]
 					},
 					{
