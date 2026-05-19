@@ -607,9 +607,6 @@ const Shell = function (
         code.classList.add("M2HighlightedCode");
       });
   };
-  const colorizationEnabled = function () {
-    return outputMode !== "standard";
-  };
   let completionMenu: HTMLUListElement | null = null;
   let completionMatches: CompletionItem[] = [];
   let completionStart = 0;
@@ -862,7 +859,7 @@ const Shell = function (
     }
 
     if (isStandardSubmittedInput(procInputSpan)) {
-      procInputSpan.textContent += clean;
+      procInputSpan.appendChild(highlightedMacaulay2Text(clean));
       pendingStandardEcho += clean + "\n";
       inputSpan.parentElement.insertBefore(
         document.createTextNode("\n"),
@@ -1252,7 +1249,7 @@ const Shell = function (
       );
        */
       htmlSec.classList.add("M2PastInput");
-      if (colorizationEnabled()) highlightMacaulay2Element(htmlSec);
+      highlightMacaulay2Element(htmlSec);
     } else if (htmlSec.classList.contains("M2Html")) {
       // first things first: make sure we don't mess with input (interrupts, tasks, etc, can display unexpectedly)
       if (anc.classList.contains("M2Input")) {
@@ -1263,7 +1260,7 @@ const Shell = function (
       // autoRender(htmlSec);
       // instead we use the non-bundled katex
       renderMathInHtml(htmlSec);
-      if (colorizationEnabled()) highlightMacaulay2CodeElements(htmlSec);
+      highlightMacaulay2CodeElements(htmlSec);
       initializeVectorGraphics(htmlSec);
       // syntax highlighting code
       /*
