@@ -10,6 +10,7 @@ type FormatterState =
 
 export interface Macaulay2FormattingOptions {
   tabSize?: number;
+  insertSpaces?: boolean;
 }
 
 interface FormattedLine {
@@ -32,11 +33,22 @@ const operatorTokens = [
   "=",
 ];
 
-function getIndentUnit(
+function getIndentText(
+  indentLevel: number,
   options: Macaulay2FormattingOptions | vscode.FormattingOptions,
 ) {
-  const tabSize = Math.max(1, Number(options.tabSize) || 4);
-  return " ".repeat(tabSize);
+  const tabSize = Math.max(1, Number(options.tabSize) || 8);
+  const indentSize = options.insertSpaces === false ? 4 : tabSize;
+  const columns = indentLevel * indentSize;
+
+  if (options.insertSpaces !== false) {
+    return " ".repeat(columns);
+  }
+
+  return (
+    "\t".repeat(Math.floor(columns / tabSize)) +
+    " ".repeat(columns % tabSize)
+  );
 }
 
 function trimOperatorSpacing(output: string) {
@@ -261,7 +273,6 @@ export function formatMacaulay2Text(
     lines.pop();
   }
 
-  const indentUnit = getIndentUnit(options);
   const formattedLines: string[] = [];
   let state: FormatterState = "code";
   let indentLevel = 0;
@@ -277,7 +288,7 @@ export function formatMacaulay2Text(
       );
       formattedLines.push(
         formatted.text.length > 0
-          ? `${indentUnit.repeat(lineIndentLevel)}${formatted.text}`
+          ? `${getIndentText(lineIndentLevel, options)}${formatted.text}`
           : "",
       );
       indentLevel = Math.max(0, indentLevel + formatted.bracketDelta);

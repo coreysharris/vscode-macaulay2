@@ -149,6 +149,13 @@
 				}
 			}
 		},
+		"configurationDefaults": {
+			"[macaulay2]": {
+				"editor.detectIndentation": false,
+				"editor.insertSpaces": false,
+				"editor.tabSize": 8
+			}
+		},
 		"keybindings": [
 			{
 				"command": "macaulay2.sendToWebview",

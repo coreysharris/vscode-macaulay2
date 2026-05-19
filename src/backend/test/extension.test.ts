@@ -134,6 +134,25 @@ suite("Extension Tests", function () {
     assert.equal(-1, [1, 2, 3].indexOf(5));
     assert.equal(-1, [1, 2, 3].indexOf(0));
   });
+
+  test("sets Macaulay2 files to an eight-column tab size", function () {
+    const manifest = JSON.parse(
+      fs.readFileSync(path.join(__dirname, "../../package.json"), "utf8"),
+    );
+    const macaulay2Language = manifest.contributes.languages.find(
+      (language: { id: string }) => language.id === "macaulay2",
+    );
+
+    assert.deepEqual(macaulay2Language.extensions, [".m2", ".d", ".dd"]);
+    assert.deepEqual(
+      manifest.contributes.configurationDefaults["[macaulay2]"],
+      {
+        "editor.detectIndentation": false,
+        "editor.insertSpaces": false,
+        "editor.tabSize": 8,
+      },
+    );
+  });
 });
 
 suite("Macaulay2 Formatter", function () {
@@ -151,6 +170,30 @@ suite("Macaulay2 Formatter", function () {
         "C = apply(F, C, (f, c) -> Polygon{apply(f, j -> V#j),",
         "        AnimMatrix => apply(steps, j -> rotation(j, c, c)),",
         '        "fill" => concatenate("rgb(", toString(1), ",", toString(2), ")")}); -- press',
+        "",
+      ].join("\n"),
+    );
+  });
+
+  test("uses four-column Macaulay2 indentation with eight-column tab stops", function () {
+    const input = [
+      "normalToricVariety = method (",
+      "TypicalValue=>NormalToricVariety,",
+      "Options=>{",
+      "CoefficientRing=>KK",
+      "}",
+      ")",
+    ].join("\n");
+
+    assert.equal(
+      formatMacaulay2Text(input, { tabSize: 8, insertSpaces: false }),
+      [
+        "normalToricVariety = method (",
+        "    TypicalValue => NormalToricVariety,",
+        "    Options => {",
+        "\tCoefficientRing => KK",
+        "    }",
+        ")",
         "",
       ].join("\n"),
     );
