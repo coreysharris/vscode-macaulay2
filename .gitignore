@@ -1,6 +1,9 @@
 out
 media/*
 !media/
+!media/VectorGraphics.js
+!media/minimal.css
+!media/webview.html
 !media/iosevka-fixed-extended.woff2
 !media/iosevka-fixed-extendedmedium.woff2
 !media/Iosevka-LICENSE.md

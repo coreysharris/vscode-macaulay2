@@ -153,6 +153,22 @@ suite("Extension Tests", function () {
       },
     );
   });
+
+  test("includes static webview assets required by the REPL", function () {
+    const extensionRoot = path.join(__dirname, "../..");
+    const requiredAssets = [
+      "media/webview.html",
+      "media/minimal.css",
+      "media/VectorGraphics.js",
+    ];
+
+    for (const asset of requiredAssets) {
+      assert.ok(
+        fs.existsSync(path.join(extensionRoot, asset)),
+        `${asset} should be present in the extension root`,
+      );
+    }
+  });
 });
 
 suite("Macaulay2 Formatter", function () {

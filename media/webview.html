@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    ${cspMeta}
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Macaulay2 Output</title>
+    <link rel="stylesheet" href="${katexCssUri}">
+    <script defer nonce="${nonce}" src="${katexJsUri}"></script>
+    <script defer nonce="${nonce}" src="${katexAutoRenderUri}"></script>
+    <link rel="stylesheet" href="${cssUri}">
+    <style>
+      :root {
+        --m2-background: #ffffff;
+        --m2-foreground: #000000;
+        --m2-muted-foreground: #607080;
+        --m2-link-foreground: #9a4d00;
+        --m2-code-background: #ffffe0;
+        --m2-code-foreground: #000000;
+        --m2-code-shadow: rgba(0, 0, 0, .75);
+        --m2-input-hover-background: #e0ffc0;
+        --m2-cell-hover-background: grey;
+        --m2-cell-selected-background: orange;
+        --m2-menu-background: #f0f0f0;
+        --m2-menu-foreground: #000000;
+        --m2-menu-border: #b1b1b1;
+        --m2-menu-shadow: rgba(0, 0, 0, .35);
+        --m2-menu-selection-background: #ff6e40;
+        --m2-menu-selection-foreground: #000000;
+        --m2-completion-kind-foreground: #57606a;
+        --m2-control-background: #f6f6f6;
+        --m2-control-foreground: #000000;
+        --m2-control-border: #8c8c8c;
+        --m2-control-hover-background: #e9eef5;
+        --m2-focus-border: #005fb8;
+        --m2-selection-background: #b3d7ff;
+        --m2-selection-foreground: #000000;
+        --m2-error-foreground: #c92a2a;
+        --m2-valid-marker-foreground: #2d6a1f;
+        --m2-caret-marker-foreground: #000000;
+        --m2-token-comment: #607080;
+        --m2-token-constant: #004060;
+        --m2-token-string: #8b2252;
+        --m2-token-keyword: #a020f0;
+        --m2-token-function: #0000ff;
+        --m2-token-class: #1c701c;
+        --m2-svg-stroke: #000000;
+      }
+
+      :root[data-macaulay2-color-theme="light"] {
+        --m2-background: #ffffff;
+        --m2-foreground: #1f2328;
+        --m2-muted-foreground: #57606a;
+        --m2-link-foreground: #0969da;
+        --m2-code-background: #f6f8fa;
+        --m2-code-foreground: #1f2328;
+        --m2-code-shadow: rgba(31, 35, 40, .18);
+        --m2-input-hover-background: #ddf4ff;
+        --m2-cell-hover-background: #d0d7de;
+        --m2-cell-selected-background: #0969da;
+        --m2-menu-background: #ffffff;
+        --m2-menu-foreground: #1f2328;
+        --m2-menu-border: #d0d7de;
+        --m2-menu-shadow: rgba(31, 35, 40, .18);
+        --m2-menu-selection-background: #0969da;
+        --m2-menu-selection-foreground: #ffffff;
+        --m2-completion-kind-foreground: #57606a;
+        --m2-control-background: #f6f8fa;
+        --m2-control-foreground: #1f2328;
+        --m2-control-border: #d0d7de;
+        --m2-control-hover-background: #eaeef2;
+        --m2-focus-border: #0969da;
+        --m2-selection-background: #0969da;
+        --m2-selection-foreground: #ffffff;
+        --m2-error-foreground: #cf222e;
+        --m2-valid-marker-foreground: #1a7f37;
+        --m2-caret-marker-foreground: #1f2328;
+        --m2-token-comment: #6e7781;
+        --m2-token-constant: #0550ae;
+        --m2-token-string: #0a3069;
+        --m2-token-keyword: #8250df;
+        --m2-token-function: #953800;
+        --m2-token-class: #116329;
+        --m2-svg-stroke: #1f2328;
+      }
+
+      :root[data-macaulay2-color-theme="dark"] {
+        --m2-background: #1f2328;
+        --m2-foreground: #e6edf3;
+        --m2-muted-foreground: #8b949e;
+        --m2-link-foreground: #58a6ff;
+        --m2-code-background: #30363d;
+        --m2-code-foreground: #e6edf3;
+        --m2-code-shadow: rgba(0, 0, 0, .5);
+        --m2-input-hover-background: #26384f;
+        --m2-cell-hover-background: #484f58;
+        --m2-cell-selected-background: #58a6ff;
+        --m2-menu-background: #161b22;
+        --m2-menu-foreground: #e6edf3;
+        --m2-menu-border: #30363d;
+        --m2-menu-shadow: rgba(0, 0, 0, .55);
+        --m2-menu-selection-background: #1f6feb;
+        --m2-menu-selection-foreground: #ffffff;
+        --m2-completion-kind-foreground: #8b949e;
+        --m2-control-background: #30363d;
+        --m2-control-foreground: #e6edf3;
+        --m2-control-border: #484f58;
+        --m2-control-hover-background: #3b444f;
+        --m2-focus-border: #58a6ff;
+        --m2-selection-background: #264f78;
+        --m2-selection-foreground: #ffffff;
+        --m2-error-foreground: #ff7b72;
+        --m2-valid-marker-foreground: #7ee787;
+        --m2-caret-marker-foreground: #e6edf3;
+        --m2-token-comment: #8b949e;
+        --m2-token-constant: #79c0ff;
+        --m2-token-string: #a5d6ff;
+        --m2-token-keyword: #d2a8ff;
+        --m2-token-function: #ffa657;
+        --m2-token-class: #7ee787;
+        --m2-svg-stroke: #e6edf3;
+      }
+
+      :root[data-macaulay2-color-theme="vscode"] {
+        --m2-background: var(--vscode-editor-background, #1e1e1e);
+        --m2-foreground: var(--vscode-editor-foreground, #d4d4d4);
+        --m2-muted-foreground: var(--vscode-descriptionForeground, #8b949e);
+        --m2-link-foreground: var(--vscode-textLink-foreground, #3794ff);
+        --m2-code-background: var(--vscode-textCodeBlock-background, rgba(127, 127, 127, .17));
+        --m2-code-foreground: var(--vscode-editor-foreground, #d4d4d4);
+        --m2-code-shadow: rgba(0, 0, 0, .35);
+        --m2-input-hover-background: var(--vscode-list-hoverBackground, rgba(127, 127, 127, .14));
+        --m2-cell-hover-background: var(--vscode-sideBarSectionHeader-border, #454545);
+        --m2-cell-selected-background: var(--vscode-focusBorder, #007fd4);
+        --m2-menu-background: var(--vscode-menu-background, var(--vscode-editorWidget-background, #252526));
+        --m2-menu-foreground: var(--vscode-menu-foreground, var(--vscode-editorWidget-foreground, var(--m2-foreground)));
+        --m2-menu-border: var(--vscode-menu-border, var(--vscode-editorWidget-border, #454545));
+        --m2-menu-shadow: rgba(0, 0, 0, .45);
+        --m2-menu-selection-background: var(--vscode-menu-selectionBackground, var(--vscode-list-activeSelectionBackground, #04395e));
+        --m2-menu-selection-foreground: var(--vscode-menu-selectionForeground, var(--vscode-list-activeSelectionForeground, #ffffff));
+        --m2-completion-kind-foreground: var(--vscode-descriptionForeground, var(--m2-muted-foreground));
+        --m2-control-background: var(--vscode-button-secondaryBackground, var(--vscode-button-background, var(--m2-menu-background)));
+        --m2-control-foreground: var(--vscode-button-secondaryForeground, var(--vscode-button-foreground, var(--m2-menu-foreground)));
+        --m2-control-border: var(--vscode-button-border, var(--m2-menu-border));
+        --m2-control-hover-background: var(--vscode-button-secondaryHoverBackground, var(--vscode-button-hoverBackground, var(--m2-input-hover-background)));
+        --m2-focus-border: var(--vscode-focusBorder, #007fd4);
+        --m2-selection-background: var(--vscode-editor-selectionBackground, #264f78);
+        --m2-selection-foreground: var(--vscode-editor-selectionForeground, var(--m2-foreground));
+        --m2-error-foreground: var(--vscode-errorForeground, #f48771);
+        --m2-valid-marker-foreground: var(--vscode-testing-iconPassed, #73c991);
+        --m2-caret-marker-foreground: var(--vscode-editor-foreground, #d4d4d4);
+        --m2-token-comment: var(--vscode-editorCodeLens-foreground, #999999);
+        --m2-token-constant: var(--vscode-symbolIcon-constantForeground, #4fc1ff);
+        --m2-token-string: var(--vscode-symbolIcon-stringForeground, #ce9178);
+        --m2-token-keyword: var(--vscode-symbolIcon-keywordForeground, #c586c0);
+        --m2-token-function: var(--vscode-symbolIcon-functionForeground, #dcdcaa);
+        --m2-token-class: var(--vscode-symbolIcon-classForeground, #4ec9b0);
+        --m2-svg-stroke: var(--vscode-editor-foreground, #d4d4d4);
+      }
+
+      html,
+      body {
+        background: var(--m2-background);
+        box-sizing: border-box;
+        color: var(--m2-foreground);
+        height: 100%;
+        margin: 0;
+        max-width: 100%;
+        overflow: hidden;
+        width: 100%;
+      }
+
+      ::selection {
+        background: var(--m2-selection-background);
+        color: var(--m2-selection-foreground);
+      }
+
+      #terminal {
+        background: var(--m2-background);
+        color: var(--m2-foreground);
+        height: 100%;
+        max-height: 100%;
+        max-width: 100%;
+        overflow-x: hidden;
+        overflow-y: auto;
+        padding-right: 1em;
+        scrollbar-gutter: stable;
+        width: 100%;
+      }
+
+      .M2Cell {
+        box-sizing: border-box;
+        max-width: 100%;
+        min-width: 0;
+        overflow-x: hidden;
+      }
+
+      .M2Input {
+        max-width: 100%;
+      }
+
+      .M2Input:not(.M2CurrentInput),
+      .M2CurrentInput:not(:empty) {
+        display: inline;
+      }
+
+      .M2PastInput,
+      .M2CurrentInput {
+        overflow-wrap: anywhere;
+        white-space: pre-wrap;
+        word-break: break-word;
+        z-index: 2;
+      }
+
+      .M2ContinuationIndent {
+        display: inline-block;
+        pointer-events: none;
+      }
+
+      .M2OutputScroll {
+        box-sizing: border-box;
+        display: inline-block;
+        max-width: 100%;
+        overflow-x: auto;
+        padding-right: 10ch;
+        scrollbar-gutter: stable;
+        vertical-align: top;
+      }
+
+      .M2OutputScroll.M2OutputScrollScrollable {
+        padding-bottom: 1.1em;
+      }
+
+      .M2OutputScroll > .M2Html {
+        max-width: none;
+      }
+
+      .M2OutputScroll > .M2Html:has(code, pre, samp, span.tt, tt) {
+        display: inline;
+        max-width: 100%;
+        white-space: normal;
+      }
+
+      .M2OutputScroll code,
+      .M2OutputScroll pre,
+      .M2OutputScroll samp,
+      .M2OutputScroll span.tt,
+      .M2OutputScroll tt {
+        overflow-wrap: anywhere;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+
+      .M2OutputScroll code.block,
+      .M2OutputScroll pre > code {
+        box-sizing: border-box;
+        max-width: 100%;
+        width: auto;
+      }
+
+      .M2OutputScroll code .token.net,
+      .M2OutputScroll code .token.string {
+        display: inline;
+        overflow-wrap: inherit;
+        white-space: inherit;
+        word-break: inherit;
+      }
+
+      .M2OutputScroll.M2StandardOutput {
+        display: block;
+        white-space: pre;
+      }
+
+      .M2Html {
+        max-width: 100%;
+      }
+
+      .M2CompletionMenu {
+        background: var(--m2-menu-background);
+        border: 1px solid var(--m2-menu-border);
+        box-shadow: 0 2px 8px var(--m2-menu-shadow);
+        color: var(--m2-menu-foreground);
+        font-family: Iosevka, monospace;
+        font-size: 13px;
+        list-style: none;
+        margin: 0;
+        max-height: 240px;
+        min-width: 260px;
+        overflow: auto;
+        padding: 2px 0;
+        position: fixed;
+        z-index: 1000;
+      }
+
+      .M2CompletionItem {
+        align-items: center;
+        cursor: default;
+        display: flex;
+        gap: 1.5em;
+        justify-content: space-between;
+        line-height: 1.5;
+        padding: 1px 8px;
+        white-space: nowrap;
+      }
+
+      .M2CompletionItem.selected {
+        background: var(--m2-menu-selection-background);
+        color: var(--m2-menu-selection-foreground);
+      }
+
+      #webviewActionBar {
+        display: flex;
+        gap: 4px;
+        padding: 4px;
+        position: fixed;
+        right: 0;
+        top: 0;
+        z-index: 10000;
+      }
+
+      #webviewActionBar button {
+        background: var(--m2-control-background);
+        border: 1px solid var(--m2-control-border);
+        border-radius: 3px;
+        color: var(--m2-control-foreground);
+        cursor: pointer;
+        font: 500 11px/1 Iosevka, monospace;
+        padding: 5px 7px;
+      }
+
+      #webviewActionBar button:hover {
+        background: var(--m2-control-hover-background);
+      }
+
+      #webviewActionBar button:focus-visible {
+        outline: 1px solid var(--m2-focus-border);
+        outline-offset: 2px;
+      }
+
+      .M2CompletionKind {
+        color: var(--m2-completion-kind-foreground);
+        font-size: 11px;
+      }
+
+      .M2CompletionItem.selected .M2CompletionKind {
+        color: inherit;
+      }
+
+      .M2Text,
+      .M2Html,
+      .katex {
+        color: var(--m2-foreground);
+      }
+
+      svg.M2Svg {
+        stroke: var(--m2-svg-stroke);
+      }
+
+      code {
+        background-color: var(--m2-code-background);
+        box-shadow: 1px 1px 2px 0 var(--m2-code-shadow);
+        color: var(--m2-code-foreground);
+      }
+
+      .M2PastInput:hover {
+        background-color: var(--m2-input-hover-background);
+        box-shadow: 1px 1px 2px 0 var(--m2-code-shadow);
+      }
+
+      .M2Cell:hover > .M2Left,
+      .M2Separator:hover {
+        background: var(--m2-cell-hover-background);
+      }
+
+      .M2Cell.M2CellSelected > .M2Left {
+        background: var(--m2-cell-selected-background) !important;
+      }
+
+      a {
+        color: var(--m2-link-foreground);
+      }
+
+      .menu .selected {
+        background-color: var(--m2-menu-selection-background);
+        color: var(--m2-menu-selection-foreground);
+      }
+
+      #contextmenu {
+        background: var(--m2-menu-background);
+        border-color: var(--m2-menu-border);
+        box-shadow: 4px 4px 3px -2px var(--m2-menu-shadow);
+        color: var(--m2-menu-foreground);
+      }
+
+      .KatexError,
+      .error-marker:after {
+        color: var(--m2-error-foreground);
+      }
+
+      .valid-marker:after {
+        color: var(--m2-valid-marker-foreground);
+      }
+
+      .caret-marker:after {
+        color: var(--m2-caret-marker-foreground);
+      }
+
+      .token.comment {
+        color: var(--m2-token-comment);
+      }
+
+      .token.constant {
+        color: var(--m2-token-constant);
+      }
+
+      .token.net,
+      .token.string {
+        color: var(--m2-token-string);
+      }
+
+      .token.keyword {
+        color: var(--m2-token-keyword);
+      }
+
+      .token.operator {
+        color: var(--m2-token-keyword);
+      }
+
+      .token.function {
+        color: var(--m2-token-function);
+      }
+
+      .token.class-name {
+        color: var(--m2-token-class);
+      }
+
+      .M2Error,
+      .M2Error .token {
+        color: var(--m2-error-foreground);
+      }
+    </style>
+    <script type="module" nonce="${nonce}" src="${scriptUri}"></script>
+    <script type="module" nonce="${nonce}" src="${VGUri}"></script>
+  </head>
+  <body>
+    <div id="terminal" class="M2Text">
+      <span id="webviewActionBar">
+        <button id="resetBtn">RESET</button><button id="interruptBtn">INTERRUPT</button>
+      </span>
+    </div>
+  </body>
+</html>
