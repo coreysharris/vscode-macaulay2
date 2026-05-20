@@ -7,7 +7,7 @@
 		"type": "git",
 		"url": "https://github.com/coreysharris/vscode-macaulay2"
 	},
-	"publisher": "Macaulay2",
+	"publisher": "coreysharris",
 	"engines": {
 		"vscode": "^1.100.0"
 	},
