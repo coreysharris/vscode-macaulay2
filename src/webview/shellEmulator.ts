@@ -126,6 +126,13 @@ const Shell = function (
     emit("openHelp", url);
   };
 
+  const normalizeOpeningHref = function (href: string) {
+    href = href.trim();
+    const quotedHref = href.match(/^["'](.+?)["'][.,;:!?]*$/);
+    if (quotedHref) return quotedHref[1];
+    return href.replace(/[.,;:!?]+$/, "");
+  };
+
   const isHtmlHelpLink = function (href: string) {
     const path = href.split("#", 1)[0].split("?", 1)[0];
     return (
@@ -147,7 +154,7 @@ const Shell = function (
     let consumedIndex = 0;
 
     while ((match = re.exec(searchText)) !== null) {
-      const href = match[1];
+      const href = normalizeOpeningHref(match[1]);
       if (isHtmlHelpLink(href)) {
         openHelp(href);
         consumedIndex = re.lastIndex;

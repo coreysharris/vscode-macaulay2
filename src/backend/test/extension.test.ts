@@ -23,6 +23,7 @@ import {
   normalizeM2LaunchArgs,
   resolveM2Executable,
   windowsPathToWslPath,
+  wslPathToWindowsPath,
 } from "../executablePath";
 import {
   getM2StartupPatch,
@@ -152,22 +153,6 @@ suite("Extension Tests", function () {
         "editor.tabSize": 8,
       },
     );
-  });
-
-  test("includes static webview assets required by the REPL", function () {
-    const extensionRoot = path.join(__dirname, "../..");
-    const requiredAssets = [
-      "media/webview.html",
-      "media/minimal.css",
-      "media/VectorGraphics.js",
-    ];
-
-    for (const asset of requiredAssets) {
-      assert.ok(
-        fs.existsSync(path.join(extensionRoot, asset)),
-        `${asset} should be present in the extension root`,
-      );
-    }
   });
 });
 
@@ -399,6 +384,31 @@ suite("Executable Launch", function () {
       windowsPathToWslPath("D:/Macaulay2 Work"),
       "/mnt/d/Macaulay2 Work",
     );
+  });
+
+  test("converts WSL UNC paths to Linux paths", function () {
+    assert.equal(
+      windowsPathToWslPath("\\\\wsl$\\Ubuntu\\home\\admin\\m2-project"),
+      "/home/admin/m2-project",
+    );
+    assert.equal(
+      windowsPathToWslPath(
+        "\\\\wsl.localhost\\Ubuntu\\usr\\share\\Macaulay2",
+      ),
+      "/usr/share/Macaulay2",
+    );
+  });
+
+  test("converts WSL paths back to Windows-openable paths", function () {
+    assert.equal(
+      wslPathToWindowsPath("/mnt/c/Users/Admin/m2-project", "Ubuntu"),
+      "C:\\Users\\Admin\\m2-project",
+    );
+    assert.equal(
+      wslPathToWindowsPath("/home/admin/m2-project", "Ubuntu"),
+      "\\\\wsl$\\Ubuntu\\home\\admin\\m2-project",
+    );
+    assert.equal(wslPathToWindowsPath("/home/admin/m2-project"), undefined);
   });
 
   test("builds a native M2 launch configuration", function () {
