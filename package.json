@@ -264,7 +264,8 @@
 	},
 	"scripts": {
 		"vscode:prepublish": "npm run compile",
-		"compile": "tsc -p tsconfig.backend.json && tsc -p tsconfig.webview.json",
+		"compile": "tsc -p tsconfig.backend.json && tsc -p tsconfig.webview.json && npm run check-webview-assets",
+		"check-webview-assets": "node scripts/check-webview-assets.js",
 		"watch-backend": "tsc -w -p tsconfig.backend.json --pretty false --preserveWatchOutput",
 		"watch-webview": "tsc -w -p tsconfig.webview.json --pretty false --preserveWatchOutput",
 		"watch": "npm-run-all --parallel watch-backend watch-webview",
