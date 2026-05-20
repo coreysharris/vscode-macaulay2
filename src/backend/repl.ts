@@ -2,12 +2,15 @@ import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
 
-import { spawn, ChildProcess } from "child_process";
+import { spawn, ChildProcess, execFileSync } from "child_process";
 import {
   getM2ExecutableResolutionDetail,
   getM2LaunchConfiguration,
   M2LaunchArgsConfiguration,
+  M2ExecutableResolution,
   resolveM2Executable,
+  windowsPathToWslPath,
+  wslPathToWindowsPath,
 } from "./executablePath";
 import { registerM2ExecutableSwitcher } from "./executableSwitcher";
 
@@ -20,6 +23,7 @@ let g_getWebviewCompletionItems:
 let proc: ChildProcess | undefined;
 let startReplPromise: Promise<void> | undefined;
 let procWorkingDir: string | undefined;
+let procFileSystem: M2ProcessFileSystem = { kind: "local" };
 let shouldRestoreEditorFocusAfterWebviewOutput = false;
 let editorToRestoreAfterWebviewOutput: vscode.TextEditor | undefined;
 
@@ -48,10 +52,21 @@ type WebviewSyntax = {
   tokens: WebviewSyntaxToken[];
   patterns: WebviewSyntaxPattern[];
 };
+type M2ProcessFileSystem =
+  | { kind: "local" }
+  | { kind: "wsl"; distroName?: string; hostExecutablePath: string };
 
 type HelpPanelState = {
   panel: vscode.WebviewPanel;
   currentFilePath: string;
+  currentM2FilePath?: string;
+};
+
+type ResolvedHelpTarget = {
+  filePath?: string;
+  m2FilePath?: string;
+  externalUri?: vscode.Uri;
+  fragment?: string;
 };
 
 const helpPanels = new Set<HelpPanelState>();
@@ -222,6 +237,27 @@ function getM2WorkingDir(): string {
   return workingDir;
 }
 
+function getM2ProcessWorkingDir(
+  resolution: M2ExecutableResolution,
+  workingDir: string,
+): string {
+  return resolution.wslExecutablePath
+    ? windowsPathToWslPath(workingDir) || "~"
+    : workingDir;
+}
+
+function getM2ProcessFileSystem(
+  resolution: M2ExecutableResolution,
+): M2ProcessFileSystem {
+  return resolution.wslExecutablePath
+    ? {
+        kind: "wsl",
+        distroName: resolution.wslDistroName,
+        hostExecutablePath: resolution.executablePath,
+      }
+    : { kind: "local" };
+}
+
 function normalizeM2Input(text: string): string {
   // TODO: remove this ... (make sure stuff copied from editor has \n) and fix ctrl-C
   // Filter out empty lines and send to terminal
@@ -258,7 +294,8 @@ function startM2() {
   proc = child;
   console.log("M2 process started (pid=", child.pid, ")");
 
-  procWorkingDir = workingDir;
+  procWorkingDir = getM2ProcessWorkingDir(resolution, workingDir);
+  procFileSystem = getM2ProcessFileSystem(resolution);
 
   child.stdout.on("data", (data) => {
     if (g_panel)
@@ -783,6 +820,28 @@ function isWindowsDrivePath(value: string): boolean {
   return /^[a-zA-Z]:[\\/]/.test(value);
 }
 
+function isUnixAbsolutePath(value: string): boolean {
+  return value.startsWith("/") && !value.startsWith("//");
+}
+
+function decodeUriPath(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+function normalizeHelpUrl(rawUrl: string): string {
+  let url = rawUrl.trim();
+  const quotedUrlMatch = url.match(/^["'](.+?)["'][.,;:!?]*$/);
+  if (quotedUrlMatch) {
+    return quotedUrlMatch[1];
+  }
+
+  return url.replace(/[.,;:!?]+$/, "");
+}
+
 function splitFragment(value: string): { pathPart: string; fragment?: string } {
   const hashIndex = value.indexOf("#");
   if (hashIndex < 0) return { pathPart: value };
@@ -791,6 +850,113 @@ function splitFragment(value: string): { pathPart: string; fragment?: string } {
     pathPart: value.substring(0, hashIndex),
     fragment: value.substring(hashIndex + 1),
   };
+}
+
+function getVSCodeFilePathForM2Path(filePath: string): string | undefined {
+  if (procFileSystem.kind !== "wsl") {
+    return filePath;
+  }
+
+  if (isWindowsDrivePath(filePath) || filePath.startsWith("\\\\")) {
+    return path.normalize(filePath);
+  }
+
+  return wslPathToWindowsPath(
+    filePath,
+    procFileSystem.distroName,
+    procFileSystem.hostExecutablePath,
+  );
+}
+
+function getHelpTargetForM2Path(
+  filePath: string,
+  fragment?: string,
+): ResolvedHelpTarget {
+  const m2FilePath = path.posix.normalize(filePath);
+  return {
+    filePath: getVSCodeFilePathForM2Path(m2FilePath) || m2FilePath,
+    m2FilePath,
+    fragment,
+  };
+}
+
+function resolveM2ProcessFilePath(targetPath: string): string {
+  const decodedTargetPath = decodeUriPath(targetPath);
+  if (isAbsoluteUri(decodedTargetPath)) {
+    const uri = vscode.Uri.parse(decodedTargetPath);
+    if (uri.scheme === "file") {
+      return procFileSystem.kind === "wsl" && isUnixAbsolutePath(uri.path)
+        ? path.posix.normalize(uri.path)
+        : uri.fsPath;
+    }
+  }
+
+  if (isWindowsDrivePath(decodedTargetPath)) {
+    return path.normalize(decodedTargetPath);
+  }
+
+  if (procFileSystem.kind === "wsl") {
+    return isUnixAbsolutePath(decodedTargetPath)
+      ? path.posix.normalize(decodedTargetPath)
+      : path.posix.resolve(procWorkingDir || "/", decodedTargetPath);
+  }
+
+  return path.resolve(procWorkingDir || process.cwd(), decodedTargetPath);
+}
+
+function resolveVSCodeFilePathForM2ProcessPath(
+  targetPath: string,
+): string | undefined {
+  const processPath = resolveM2ProcessFilePath(targetPath);
+  return getVSCodeFilePathForM2Path(processPath);
+}
+
+function resolveHelpFilePath(
+  pathPart: string,
+  baseFilePath?: string,
+  baseM2FilePath?: string,
+  fragment?: string,
+): ResolvedHelpTarget {
+  const decodedPathPart = decodeUriPath(pathPart);
+
+  if (isWindowsDrivePath(decodedPathPart)) {
+    return { filePath: path.normalize(decodedPathPart), fragment };
+  }
+
+  if (procFileSystem.kind === "wsl" && isUnixAbsolutePath(decodedPathPart)) {
+    return getHelpTargetForM2Path(decodedPathPart, fragment);
+  }
+
+  if (procFileSystem.kind === "wsl" && baseM2FilePath) {
+    const m2BaseDir = path.posix.dirname(baseM2FilePath);
+    const m2Path =
+      decodedPathPart.length === 0
+        ? baseM2FilePath
+        : path.posix.resolve(m2BaseDir, decodedPathPart);
+    return getHelpTargetForM2Path(m2Path, fragment);
+  }
+
+  if (baseFilePath) {
+    return {
+      filePath:
+        decodedPathPart.length === 0
+          ? baseFilePath
+          : path.resolve(path.dirname(baseFilePath), decodedPathPart),
+      fragment,
+    };
+  }
+
+  if (procFileSystem.kind === "wsl") {
+    const baseDir = procWorkingDir || windowsPathToWslPath(process.cwd());
+    const m2Path =
+      decodedPathPart.length === 0
+        ? baseDir
+        : path.posix.resolve(baseDir || "/", decodedPathPart);
+    return getHelpTargetForM2Path(m2Path, fragment);
+  }
+
+  const baseDir = procWorkingDir || process.cwd();
+  return { filePath: path.resolve(baseDir, decodedPathPart), fragment };
 }
 
 function getMacaulay2DocRoot(filePath: string): string | undefined {
@@ -811,12 +977,9 @@ function getMacaulay2DocRoot(filePath: string): string | undefined {
 function resolveHelpTarget(
   rawUrl: string,
   baseFilePath?: string,
-): {
-  filePath?: string;
-  externalUri?: vscode.Uri;
-  fragment?: string;
-} {
-  const trimmedUrl = (rawUrl || "").trim();
+  baseM2FilePath?: string,
+): ResolvedHelpTarget {
+  const trimmedUrl = normalizeHelpUrl(rawUrl || "");
   if (!trimmedUrl) return {};
   const { pathPart, fragment } = splitFragment(trimmedUrl);
 
@@ -830,24 +993,15 @@ function resolveHelpTarget(
   if (isAbsoluteUri(trimmedUrl)) {
     const uri = vscode.Uri.parse(trimmedUrl);
     if (uri.scheme === "file") {
-      return {
-        filePath: uri.fsPath,
-        fragment: uri.fragment || undefined,
-      };
+      return procFileSystem.kind === "wsl" && isUnixAbsolutePath(uri.path)
+        ? getHelpTargetForM2Path(uri.path, uri.fragment || undefined)
+        : { filePath: uri.fsPath, fragment: uri.fragment || undefined };
     }
 
     return { externalUri: uri };
   }
 
-  const baseDir = baseFilePath
-    ? path.dirname(baseFilePath)
-    : procWorkingDir || process.cwd();
-  const filePath =
-    pathPart.length === 0 && baseFilePath
-      ? baseFilePath
-      : path.resolve(baseDir, pathPart);
-
-  return { filePath, fragment };
+  return resolveHelpFilePath(pathPart, baseFilePath, baseM2FilePath, fragment);
 }
 
 function getHelpLocalResourceRoots(filePath: string): vscode.Uri[] {
@@ -1173,21 +1327,82 @@ function getHelpThemeStyle(): string {
 
 function refreshHelpPanels() {
   Array.from(helpPanels).forEach((state) => {
-    if (!fs.existsSync(state.currentFilePath)) return;
+    if (!helpFileExists(state.currentFilePath, state.currentM2FilePath)) return;
+
+    const rawHtml = readHelpFileSync(
+      state.currentFilePath,
+      state.currentM2FilePath,
+    );
+    if (rawHtml === undefined) return;
 
     state.panel.webview.html = getHelpWebviewContent(
       state.panel.webview,
       state.currentFilePath,
+      undefined,
+      rawHtml,
     );
   });
+}
+
+function wslFileExists(m2FilePath?: string): boolean {
+  if (procFileSystem.kind !== "wsl" || !m2FilePath) {
+    return false;
+  }
+
+  try {
+    execFileSync(
+      procFileSystem.hostExecutablePath,
+      ["--exec", "test", "-e", m2FilePath],
+      { stdio: "ignore", timeout: 5000 },
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function helpFileExists(filePath: string, m2FilePath?: string): boolean {
+  return fs.existsSync(filePath) || wslFileExists(m2FilePath);
+}
+
+function readWslTextFileSync(m2FilePath?: string): string | undefined {
+  if (procFileSystem.kind !== "wsl" || !m2FilePath) {
+    return undefined;
+  }
+
+  try {
+    return execFileSync(
+      procFileSystem.hostExecutablePath,
+      ["--exec", "cat", m2FilePath],
+      {
+        encoding: "utf8",
+        maxBuffer: 16 * 1024 * 1024,
+        timeout: 5000,
+      },
+    );
+  } catch {
+    return undefined;
+  }
+}
+
+function readHelpFileSync(
+  filePath: string,
+  m2FilePath?: string,
+): string | undefined {
+  if (fs.existsSync(filePath)) {
+    return fs.readFileSync(filePath, "utf8");
+  }
+
+  return readWslTextFileSync(m2FilePath);
 }
 
 function getHelpWebviewContent(
   webview: vscode.Webview,
   filePath: string,
   fragment?: string,
+  rawHtml?: string,
 ): string {
-  let html = fs.readFileSync(filePath, "utf8");
+  let html = rawHtml ?? fs.readFileSync(filePath, "utf8");
   const colorTheme = getWebviewColorTheme();
   html = setHtmlColorThemeAttribute(html, colorTheme);
   const fileDir = path.dirname(filePath);
@@ -1274,7 +1489,11 @@ function getHelpWebviewContent(
 }
 
 async function openHelpUrl(rawUrl: string, state?: HelpPanelState) {
-  const target = resolveHelpTarget(rawUrl, state?.currentFilePath);
+  const target = resolveHelpTarget(
+    rawUrl,
+    state?.currentFilePath,
+    state?.currentM2FilePath,
+  );
   if (target.externalUri) {
     await vscode.env.openExternal(target.externalUri);
     return;
@@ -1288,7 +1507,7 @@ async function openHelpUrl(rawUrl: string, state?: HelpPanelState) {
   }
 
   const filePath = target.filePath;
-  if (!fs.existsSync(filePath)) {
+  if (!helpFileExists(filePath, target.m2FilePath)) {
     vscode.window.showErrorMessage(
       `Macaulay2 help file does not exist: ${filePath}`,
     );
@@ -1308,11 +1527,19 @@ async function openHelpUrl(rawUrl: string, state?: HelpPanelState) {
     return;
   }
 
-  const rawHtml = fs.readFileSync(filePath, "utf8");
+  const rawHtml = readHelpFileSync(filePath, target.m2FilePath);
+  if (rawHtml === undefined) {
+    vscode.window.showErrorMessage(
+      `Macaulay2 help file could not be read: ${filePath}`,
+    );
+    return;
+  }
   const title = getHtmlTitle(rawHtml, path.basename(filePath));
-  const panelState = state || createHelpPanel(title, filePath);
+  const panelState =
+    state || createHelpPanel(title, filePath, target.m2FilePath);
 
   panelState.currentFilePath = filePath;
+  panelState.currentM2FilePath = target.m2FilePath;
   panelState.panel.title = title;
   panelState.panel.webview.options = {
     ...panelState.panel.webview.options,
@@ -1322,6 +1549,7 @@ async function openHelpUrl(rawUrl: string, state?: HelpPanelState) {
     panelState.panel.webview,
     filePath,
     target.fragment,
+    rawHtml,
   );
   panelState.panel.reveal(panelState.panel.viewColumn || getHelpViewColumn());
 }
@@ -1332,7 +1560,11 @@ function reportHelpOpenError(error: any) {
   vscode.window.showErrorMessage(`Failed to open Macaulay2 help: ${message}`);
 }
 
-function createHelpPanel(title: string, filePath: string): HelpPanelState {
+function createHelpPanel(
+  title: string,
+  filePath: string,
+  m2FilePath?: string,
+): HelpPanelState {
   const panel = vscode.window.createWebviewPanel(
     "macaulay2Help",
     title,
@@ -1343,7 +1575,11 @@ function createHelpPanel(title: string, filePath: string): HelpPanelState {
       localResourceRoots: getHelpLocalResourceRoots(filePath),
     },
   );
-  const state = { panel, currentFilePath: filePath };
+  const state = {
+    panel,
+    currentFilePath: filePath,
+    currentM2FilePath: m2FilePath,
+  };
 
   panel.webview.onDidReceiveMessage((message) => {
     if (message.type === "openHelpLink") {
@@ -1496,8 +1732,14 @@ function handleWebviewMessage(message: any) {
           start.column,
         );
       }
-      const absPath = path.resolve(procWorkingDir!, relPath);
-      const fileUri = vscode.Uri.file(absPath);
+      const filePath = resolveVSCodeFilePathForM2ProcessPath(relPath);
+      if (!filePath) {
+        vscode.window.showErrorMessage(
+          `Cannot open Macaulay2 output link because the WSL path could not be mapped to Windows: ${relPath}`,
+        );
+        break;
+      }
+      const fileUri = vscode.Uri.file(filePath);
       vscode.window.showTextDocument(fileUri, {
         preview: false,
         selection,

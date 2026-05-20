@@ -7,6 +7,7 @@ export interface M2ExecutableResolution {
   executablePath: string;
   source: string;
   wslExecutablePath?: string;
+  wslDistroName?: string;
 }
 
 export interface M2LaunchConfiguration {
@@ -189,6 +190,13 @@ export function getM2ExecutableResolutionDetail(
 
 export function windowsPathToWslPath(filePath: string): string {
   const normalizedPath = filePath.replace(/\\/g, "/");
+  const wslUncMatch = normalizedPath.match(
+    /^\/\/(?:wsl\$|wsl\.localhost)\/[^/]+(\/.*)?$/i,
+  );
+  if (wslUncMatch) {
+    return wslUncMatch[1] || "/";
+  }
+
   const driveMatch = normalizedPath.match(/^([a-zA-Z]):\/?(.*)$/);
   if (!driveMatch) {
     return normalizedPath;
@@ -197,6 +205,38 @@ export function windowsPathToWslPath(filePath: string): string {
   const [, drive, rest] = driveMatch;
   const suffix = rest ? `/${rest.replace(/^\/+/, "")}` : "";
   return `/mnt/${drive.toLowerCase()}${suffix}`;
+}
+
+export function wslPathToWindowsPath(
+  filePath: string,
+  distroName?: string,
+  wslHostExecutablePath?: string,
+): string | undefined {
+  const normalizedPath = filePath.replace(/\\/g, "/");
+  const driveMatch = normalizedPath.match(/^\/mnt\/([a-zA-Z])(?:\/(.*))?$/);
+  if (driveMatch) {
+    const [, drive, rest] = driveMatch;
+    return `${drive.toUpperCase()}:\\${rest ? rest.replace(/\//g, "\\") : ""}`;
+  }
+
+  if (!isUnixAbsolutePath(normalizedPath)) {
+    return undefined;
+  }
+
+  const wslPath = wslHostExecutablePath
+    ? resolveWslWindowsPath(wslHostExecutablePath, normalizedPath)
+    : undefined;
+  if (wslPath) {
+    return wslPath;
+  }
+
+  if (!distroName) {
+    return undefined;
+  }
+
+  const suffix =
+    normalizedPath === "/" ? "\\" : normalizedPath.replace(/\//g, "\\");
+  return `\\\\wsl$\\${distroName}${suffix}`;
 }
 
 function normalizeConfiguredPath(configuredPath?: string): string | undefined {
@@ -220,6 +260,7 @@ function resolveManualWslExecutable(
     executablePath: wslPath,
     source: "setting via WSL",
     wslExecutablePath: configuredPath,
+    wslDistroName: resolveWslDistroName(wslPath),
   };
 }
 
@@ -282,7 +323,40 @@ function resolveWithWsl(): M2ExecutableResolution | undefined {
     executablePath: wslPath,
     source: "WSL",
     wslExecutablePath,
+    wslDistroName: resolveWslDistroName(wslPath),
   };
+}
+
+function resolveWslDistroName(wslPath: string): string | undefined {
+  const envDistroName = normalizeShellOutputPath(
+    runShellCommand(
+      wslPath,
+      ["--exec", "sh", "-lc", 'printf "%s" "$WSL_DISTRO_NAME"'],
+      5000,
+    ),
+  );
+  if (envDistroName) {
+    return envDistroName;
+  }
+
+  const windowsRoot = resolveWslWindowsPath(wslPath, "/");
+  const rootMatch = windowsRoot?.match(
+    /^\\\\(?:wsl\$|wsl\.localhost)\\([^\\]+)(?:\\|$)/i,
+  );
+  return rootMatch?.[1];
+}
+
+function resolveWslWindowsPath(
+  wslHostExecutablePath: string,
+  filePath: string,
+): string | undefined {
+  return normalizeShellOutputPath(
+    runShellCommand(
+      wslHostExecutablePath,
+      ["--exec", "wslpath", "-w", filePath],
+      5000,
+    ),
+  );
 }
 
 function findWslExecutable(): string | undefined {
