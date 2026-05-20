@@ -1,0 +1,64 @@
+// @M2BANNER@
+
+'use strict';
+
+import * as vscode from 'vscode';
+
+export type WebviewCompletionItem = {
+    label: string;
+    kind: string;
+};
+
+let webviewCompletionItems: WebviewCompletionItem[] = [];
+
+function toWebviewCompletionItems(wordsList:string[], kind:string): WebviewCompletionItem[] {
+    return wordsList.map(label => ({ label, kind }));
+}
+
+export function getWebviewCompletionItems(): WebviewCompletionItem[] {
+    return webviewCompletionItems;
+}
+
+export function activate(context: vscode.ExtensionContext) {
+
+    const typeWords = [@M2DATATYPES@];
+    const functionWords = [@M2FUNCTIONS@];
+    const constWords = [@M2CONSTANTS@];
+    const keyWords = [@M2KEYWORDS@];
+
+    webviewCompletionItems = [
+        ...toWebviewCompletionItems(typeWords, "Class"),
+        ...toWebviewCompletionItems(functionWords, "Function"),
+        ...toWebviewCompletionItems(constWords, "Constant"),
+        ...toWebviewCompletionItems(keyWords, "Keyword"),
+    ];
+
+    function createCompletionProvider(wordsList:string[], itemType:vscode.CompletionItemKind) {
+        const completionProvider = vscode.languages.registerCompletionItemProvider( 'macaulay2', {
+            provideCompletionItems(document: vscode.TextDocument, position: vscode.Position) {
+                const rx = /.*\b(\w+)$/;
+                let linePrefix = document.lineAt(position).text.substr(0,position.character);
+                let match = rx.exec(linePrefix);
+                if (!match) return undefined;
+                // console.log(match);
+                // if (match && match![1].length >= 2) {
+                    let selectedWords = (wordsList.filter(w => w.startsWith(match![1])));
+                    return selectedWords.map(w => {
+                        let completionItem = new vscode.CompletionItem(w, itemType);
+                        completionItem.documentation = new vscode.MarkdownString('THIS IS A DOCUMEN\n**TEST');
+                        return completionItem;
+                    });
+                // } else {
+                    // return undefined;
+                // }
+            }
+        });
+        return completionProvider;
+    }
+
+    context.subscriptions.push(createCompletionProvider(typeWords, vscode.CompletionItemKind.Class));
+    context.subscriptions.push(createCompletionProvider(functionWords, vscode.CompletionItemKind.Method));
+    context.subscriptions.push(createCompletionProvider(constWords, vscode.CompletionItemKind.Property));
+    context.subscriptions.push(createCompletionProvider(keyWords, vscode.CompletionItemKind.Keyword));
+
+}
