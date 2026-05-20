@@ -1539,14 +1539,6 @@ async function openHelpUrl(rawUrl: string, state?: HelpPanelState) {
     return;
   }
 
-  if (!getMacaulay2DocRoot(filePath)) {
-    await vscode.window.showTextDocument(vscode.Uri.file(filePath), {
-      preview: false,
-      viewColumn: getHelpViewColumn(),
-    });
-    return;
-  }
-
   const rawHtml = readHelpFileSync(filePath, target.m2FilePath);
   if (rawHtml === undefined) {
     vscode.window.showErrorMessage(

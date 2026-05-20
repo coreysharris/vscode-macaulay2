@@ -149,7 +149,7 @@ const Shell = function (
     }
 
     const searchText = pendingStandardViewHelpOutput + txt;
-    const re = /(?:^|\n)o\d+ = Opening\s+(\S+)/g;
+    const re = /(?:^|\n)o\d+\s*=\s*Opening\s+(\S+)/g;
     let match: RegExpExecArray | null;
     let consumedIndex = 0;
 
