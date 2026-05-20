@@ -887,16 +887,314 @@ function getHelpViewColumn(): vscode.ViewColumn {
   );
 }
 
+function setHtmlColorThemeAttribute(
+  html: string,
+  colorTheme: WebviewColorTheme,
+): string {
+  if (!/<html\b[^>]*>/i.test(html)) return html;
+
+  return html.replace(/<html\b([^>]*)>/i, (match, attributes) => {
+    if (/data-macaulay2-color-theme\s*=/i.test(attributes)) return match;
+
+    return `<html${attributes} data-macaulay2-color-theme="${escapeHtmlAttribute(
+      colorTheme,
+    )}">`;
+  });
+}
+
+function getHelpThemeStyle(): string {
+  return `<style id="macaulay2-vscode-help-theme">
+  :root {
+    --m2-help-background: #d8ffff;
+    --m2-help-foreground: #000000;
+    --m2-help-muted-foreground: #57606a;
+    --m2-help-link: #0040a8;
+    --m2-help-link-visited: #551a8b;
+    --m2-help-link-hover: #006666;
+    --m2-help-rule: #50b0b0;
+    --m2-help-panel-background: #eaffff;
+    --m2-help-code-background: #f7ffff;
+    --m2-help-code-foreground: #000000;
+    --m2-help-code-border: #50b0b0;
+    --m2-help-example-background: #c0ffff;
+    --m2-help-example-border: #50b0b0;
+    --m2-help-token-comment: #607080;
+    --m2-help-token-constant: #004060;
+    --m2-help-token-string: #8b2252;
+    --m2-help-token-keyword: #a020f0;
+    --m2-help-token-function: #0000ff;
+    --m2-help-token-class: #1c701c;
+    --m2-help-token-operator: #6f4d19;
+    --m2-help-token-punctuation: #57606a;
+    --m2-help-selection-background: #b3d7ff;
+    --m2-help-selection-foreground: #000000;
+  }
+
+  :root[data-macaulay2-color-theme="light"] {
+    --m2-help-background: #ffffff;
+    --m2-help-foreground: #1f2328;
+    --m2-help-muted-foreground: #57606a;
+    --m2-help-link: #0969da;
+    --m2-help-link-visited: #8250df;
+    --m2-help-link-hover: #0550ae;
+    --m2-help-rule: #d0d7de;
+    --m2-help-panel-background: #f6f8fa;
+    --m2-help-code-background: #f6f8fa;
+    --m2-help-code-foreground: #1f2328;
+    --m2-help-code-border: #d0d7de;
+    --m2-help-example-background: #f6f8fa;
+    --m2-help-example-border: #d0d7de;
+    --m2-help-token-comment: #57606a;
+    --m2-help-token-constant: #0550ae;
+    --m2-help-token-string: #0a3069;
+    --m2-help-token-keyword: #8250df;
+    --m2-help-token-function: #953800;
+    --m2-help-token-class: #116329;
+    --m2-help-token-operator: #953800;
+    --m2-help-token-punctuation: #57606a;
+    --m2-help-selection-background: #0969da;
+    --m2-help-selection-foreground: #ffffff;
+  }
+
+  :root[data-macaulay2-color-theme="dark"] {
+    --m2-help-background: #1f2328;
+    --m2-help-foreground: #e6edf3;
+    --m2-help-muted-foreground: #8b949e;
+    --m2-help-link: #58a6ff;
+    --m2-help-link-visited: #d2a8ff;
+    --m2-help-link-hover: #79c0ff;
+    --m2-help-rule: #484f58;
+    --m2-help-panel-background: #161b22;
+    --m2-help-code-background: #30363d;
+    --m2-help-code-foreground: #e6edf3;
+    --m2-help-code-border: #484f58;
+    --m2-help-example-background: #30363d;
+    --m2-help-example-border: #484f58;
+    --m2-help-token-comment: #9aa4ad;
+    --m2-help-token-constant: #79c0ff;
+    --m2-help-token-string: #a5d6ff;
+    --m2-help-token-keyword: #d2a8ff;
+    --m2-help-token-function: #ffa657;
+    --m2-help-token-class: #7ee787;
+    --m2-help-token-operator: #ffa657;
+    --m2-help-token-punctuation: #c9d1d9;
+    --m2-help-selection-background: #264f78;
+    --m2-help-selection-foreground: #ffffff;
+  }
+
+  :root[data-macaulay2-color-theme="vscode"] {
+    --m2-help-background: var(--vscode-editor-background, #1e1e1e);
+    --m2-help-foreground: var(--vscode-editor-foreground, #d4d4d4);
+    --m2-help-muted-foreground: var(--vscode-descriptionForeground, #8b949e);
+    --m2-help-link: var(--vscode-textLink-foreground, #3794ff);
+    --m2-help-link-visited: var(--vscode-textLink-foreground, #c586c0);
+    --m2-help-link-hover: var(--vscode-textLink-activeForeground, #4daafc);
+    --m2-help-rule: var(--vscode-editorWidget-border, #454545);
+    --m2-help-panel-background: var(--vscode-editorWidget-background, #252526);
+    --m2-help-code-background: var(--vscode-textCodeBlock-background, rgba(127, 127, 127, .17));
+    --m2-help-code-foreground: var(--vscode-editor-foreground, #d4d4d4);
+    --m2-help-code-border: var(--vscode-editorWidget-border, #454545);
+    --m2-help-example-background: var(--vscode-textCodeBlock-background, rgba(127, 127, 127, .17));
+    --m2-help-example-border: var(--vscode-editorWidget-border, #454545);
+    --m2-help-token-comment: var(--vscode-editorCodeLens-foreground, #999999);
+    --m2-help-token-constant: var(--vscode-symbolIcon-constantForeground, #4fc1ff);
+    --m2-help-token-string: var(--vscode-symbolIcon-stringForeground, #ce9178);
+    --m2-help-token-keyword: var(--vscode-symbolIcon-keywordForeground, #c586c0);
+    --m2-help-token-function: var(--vscode-symbolIcon-functionForeground, #dcdcaa);
+    --m2-help-token-class: var(--vscode-symbolIcon-classForeground, #4ec9b0);
+    --m2-help-token-operator: var(--vscode-symbolIcon-operatorForeground, #d4d4d4);
+    --m2-help-token-punctuation: var(--vscode-editor-foreground, #d4d4d4);
+    --m2-help-selection-background: var(--vscode-editor-selectionBackground, #264f78);
+    --m2-help-selection-foreground: var(--vscode-editor-selectionForeground, var(--m2-help-foreground));
+  }
+
+  html,
+  body {
+    background: var(--m2-help-background) !important;
+    color: var(--m2-help-foreground) !important;
+  }
+
+  body {
+    box-sizing: border-box;
+    line-height: 1.45;
+    margin: 1.25rem auto;
+    max-width: 1100px;
+    padding: 0 1.25rem 2rem;
+  }
+
+  ::selection {
+    background: var(--m2-help-selection-background);
+    color: var(--m2-help-selection-foreground);
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    color: var(--m2-help-foreground);
+  }
+
+  hr {
+    border: 0;
+    border-top: 1px solid var(--m2-help-rule);
+  }
+
+  a:link,
+  a {
+    background-color: transparent !important;
+    color: var(--m2-help-link) !important;
+  }
+
+  a:visited {
+    color: var(--m2-help-link-visited) !important;
+  }
+
+  a:hover,
+  a:active {
+    color: var(--m2-help-link-hover) !important;
+  }
+
+  div#buttons {
+    background: var(--m2-help-panel-background);
+    border: 1px solid var(--m2-help-rule);
+    border-radius: 6px;
+    box-sizing: border-box;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    padding: .75rem;
+  }
+
+  input,
+  select,
+  textarea {
+    background: var(--m2-help-code-background);
+    border: 1px solid var(--m2-help-code-border);
+    color: var(--m2-help-code-foreground);
+  }
+
+  code,
+  kbd,
+  pre,
+  samp,
+  span.tt,
+  tt {
+    background: var(--m2-help-code-background) !important;
+    color: var(--m2-help-code-foreground) !important;
+    font-family: Iosevka, ui-monospace, SFMono-Regular, Consolas, monospace;
+  }
+
+  code,
+  kbd,
+  samp,
+  span.tt,
+  tt {
+    border: 1px solid var(--m2-help-code-border);
+    border-radius: 4px;
+    padding: .08em .25em;
+  }
+
+  pre {
+    border: 1px solid var(--m2-help-code-border);
+    border-radius: 6px;
+    box-sizing: border-box;
+    line-height: 1.35;
+    max-width: 100%;
+    overflow-x: auto;
+    padding: .75rem;
+  }
+
+  pre code,
+  table.examples pre,
+  table.examples pre code {
+    background: transparent !important;
+    border: 0;
+    color: var(--m2-help-code-foreground) !important;
+    padding: 0;
+  }
+
+  table.examples,
+  table.matrix {
+    background: var(--m2-help-example-background) !important;
+    border-color: var(--m2-help-example-border) !important;
+    border-radius: 6px;
+    box-sizing: border-box;
+    max-width: 100%;
+    overflow: auto;
+    width: auto;
+  }
+
+  table.examples td,
+  table.matrix td,
+  table.matrix th {
+    background: var(--m2-help-code-background);
+    border-color: var(--m2-help-example-border) !important;
+    color: var(--m2-help-code-foreground);
+  }
+
+  .token.comment {
+    color: var(--m2-help-token-comment) !important;
+  }
+
+  .token.constant {
+    color: var(--m2-help-token-constant) !important;
+  }
+
+  .token.net,
+  .token.string {
+    color: var(--m2-help-token-string) !important;
+  }
+
+  .token.keyword {
+    color: var(--m2-help-token-keyword) !important;
+  }
+
+  .token.function {
+    color: var(--m2-help-token-function) !important;
+  }
+
+  .token.class-name {
+    color: var(--m2-help-token-class) !important;
+  }
+
+  .token.operator,
+  .token.entity,
+  .token.url,
+  .language-css .token.string,
+  .style .token.string {
+    background: transparent !important;
+    color: var(--m2-help-token-operator) !important;
+  }
+
+  .token.punctuation {
+    color: var(--m2-help-token-punctuation) !important;
+  }
+</style>`;
+}
+
+function refreshHelpPanels() {
+  Array.from(helpPanels).forEach((state) => {
+    if (!fs.existsSync(state.currentFilePath)) return;
+
+    state.panel.webview.html = getHelpWebviewContent(
+      state.panel.webview,
+      state.currentFilePath,
+    );
+  });
+}
+
 function getHelpWebviewContent(
   webview: vscode.Webview,
   filePath: string,
   fragment?: string,
 ): string {
   let html = fs.readFileSync(filePath, "utf8");
+  const colorTheme = getWebviewColorTheme();
+  html = setHtmlColorThemeAttribute(html, colorTheme);
   const fileDir = path.dirname(filePath);
   const dirPath = fileDir.endsWith(path.sep) ? fileDir : fileDir + path.sep;
   const baseUri = webview.asWebviewUri(vscode.Uri.file(dirPath)).toString();
   const baseTag = `<base href="${escapeHtmlAttribute(baseUri)}">`;
+  const themeStyle = getHelpThemeStyle();
   const navigationScript = `
 <script>
 (function() {
@@ -960,6 +1258,12 @@ function getHelpWebviewContent(
     html = html.replace(/<head[^>]*>/i, (headTag) => `${headTag}\n${baseTag}`);
   } else {
     html = `${baseTag}\n${html}`;
+  }
+
+  if (/<\/head>/i.test(html)) {
+    html = html.replace(/<\/head>/i, `${themeStyle}\n</head>`);
+  } else {
+    html = `${themeStyle}\n${html}`;
   }
 
   if (/<\/body>/i.test(html)) {
@@ -1270,6 +1574,7 @@ export function activate(
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration("macaulay2.webviewColorTheme")) {
         postWebviewSettings();
+        refreshHelpPanels();
       }
     }),
   );

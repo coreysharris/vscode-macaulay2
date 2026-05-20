@@ -458,15 +458,49 @@ const Shell = function (
   const rememberInputPromptIndent = function () {
     inputPromptIndentColumns = trailingLineColumns(htmlSec.textContent || "");
   };
-  const insertContinuationIndent = function () {
-    if (!inputSpan || !htmlSec.classList.contains("M2Input")) return;
-
+  const makeContinuationIndent = function () {
     // Visual-only spacer; keep it out of inputSpan so M2 input/history stay unchanged.
     const spacer = document.createElement("span");
     spacer.className = continuationIndentClass;
     spacer.contentEditable = "false";
     spacer.setAttribute("aria-hidden", "true");
     spacer.style.width = `${inputPromptIndentColumns}ch`;
+    return spacer;
+  };
+  const inputHasContinuationIndent = function () {
+    return (
+      inputSpan &&
+      inputSpan.previousElementSibling &&
+      inputSpan.previousElementSibling.classList.contains(
+        continuationIndentClass,
+      )
+    );
+  };
+  const insertStandardContinuationIndent = function () {
+    if (!inputSpan || outputMode !== "standard" || inputHasContinuationIndent())
+      return;
+
+    inputSpan.parentElement.insertBefore(makeContinuationIndent(), inputSpan);
+  };
+  const removeStandardContinuationIndent = function () {
+    if (!inputHasContinuationIndent()) return;
+    inputSpan.previousElementSibling.remove();
+  };
+  const standardEchoText = function (txt: string) {
+    const continuationPrompt = " ".repeat(inputPromptIndentColumns);
+    return (
+      txt
+        .split("\n")
+        .map((line, index) =>
+          index > 0 ? continuationPrompt + line : line,
+        )
+        .join("\n") + "\n"
+    );
+  };
+  const insertContinuationIndent = function () {
+    if (!inputSpan || !htmlSec.classList.contains("M2Input")) return;
+
+    const spacer = makeContinuationIndent();
     htmlSec.insertBefore(spacer, inputSpan);
   };
   const enterStandardMode = function () {
@@ -934,7 +968,9 @@ const Shell = function (
   };
 
   const createProcessingInputSpan = function () {
-    const isStandardInput = inputFollowsStandardPrompt();
+    const isStandardInput = outputMode === "standard";
+    if (isStandardInput && !inputFollowsStandardPrompt())
+      insertStandardContinuationIndent();
     const span = document.createElement(isStandardInput ? "span" : "div");
     if (isStandardInput)
       span.className = "M2Text M2PastInput " + standardSubmittedInputClass;
@@ -954,16 +990,25 @@ const Shell = function (
 
     if (isStandardSubmittedInput(procInputSpan)) {
       procInputSpan.appendChild(highlightedMacaulay2Text(clean));
-      pendingStandardEcho += clean + "\n";
+      pendingStandardEcho += standardEchoText(clean);
       inputSpan.parentElement.insertBefore(
         document.createTextNode("\n"),
         inputSpan,
       );
+      insertStandardContinuationIndent();
+      procInputSpan = null;
     } else procInputSpan.textContent += clean + returnSymbol + "\n";
   };
 
   const suppressPendingStandardEcho = function (msg: string) {
-    if (pendingStandardEcho.length == 0) return msg;
+    if (pendingStandardEcho.length == 0) {
+      if (
+        outputMode === "standard" &&
+        msg === " ".repeat(inputPromptIndentColumns)
+      )
+        return "";
+      return msg;
+    }
 
     if (pendingStandardEcho.startsWith(msg)) {
       pendingStandardEcho = pendingStandardEcho.substring(msg.length);
@@ -973,6 +1018,11 @@ const Shell = function (
     if (msg.startsWith(pendingStandardEcho)) {
       const result = msg.substring(pendingStandardEcho.length);
       pendingStandardEcho = "";
+      if (
+        outputMode === "standard" &&
+        result === " ".repeat(inputPromptIndentColumns)
+      )
+        return "";
       return result;
     }
 
@@ -1588,6 +1638,9 @@ const Shell = function (
         : null;
     if (standardPrompt) {
       enterStandardMode();
+      inputPromptIndentColumns =
+        standardPrompt.prompt.length + standardPrompt.suffix.length;
+      removeStandardContinuationIndent();
       if (standardPrompt.before.length > 0) displayText(standardPrompt.before);
       if (standardPrompt.separator.length > 0)
         htmlSec.insertBefore(

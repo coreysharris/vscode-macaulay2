@@ -14,7 +14,7 @@
         --m2-background: #ffffff;
         --m2-foreground: #000000;
         --m2-muted-foreground: #607080;
-        --m2-link-foreground: #c86400;
+        --m2-link-foreground: #9a4d00;
         --m2-code-background: #ffffe0;
         --m2-code-foreground: #000000;
         --m2-code-shadow: rgba(0, 0, 0, .75);
@@ -22,12 +22,21 @@
         --m2-cell-hover-background: grey;
         --m2-cell-selected-background: orange;
         --m2-menu-background: #f0f0f0;
+        --m2-menu-foreground: #000000;
         --m2-menu-border: #b1b1b1;
         --m2-menu-shadow: rgba(0, 0, 0, .35);
         --m2-menu-selection-background: #ff6e40;
         --m2-menu-selection-foreground: #000000;
-        --m2-error-foreground: red;
-        --m2-valid-marker-foreground: #50a000;
+        --m2-completion-kind-foreground: #57606a;
+        --m2-control-background: #f6f6f6;
+        --m2-control-foreground: #000000;
+        --m2-control-border: #8c8c8c;
+        --m2-control-hover-background: #e9eef5;
+        --m2-focus-border: #005fb8;
+        --m2-selection-background: #b3d7ff;
+        --m2-selection-foreground: #000000;
+        --m2-error-foreground: #c92a2a;
+        --m2-valid-marker-foreground: #2d6a1f;
         --m2-caret-marker-foreground: #000000;
         --m2-token-comment: #607080;
         --m2-token-constant: #004060;
@@ -50,10 +59,19 @@
         --m2-cell-hover-background: #d0d7de;
         --m2-cell-selected-background: #0969da;
         --m2-menu-background: #ffffff;
+        --m2-menu-foreground: #1f2328;
         --m2-menu-border: #d0d7de;
         --m2-menu-shadow: rgba(31, 35, 40, .18);
         --m2-menu-selection-background: #0969da;
         --m2-menu-selection-foreground: #ffffff;
+        --m2-completion-kind-foreground: #57606a;
+        --m2-control-background: #f6f8fa;
+        --m2-control-foreground: #1f2328;
+        --m2-control-border: #d0d7de;
+        --m2-control-hover-background: #eaeef2;
+        --m2-focus-border: #0969da;
+        --m2-selection-background: #0969da;
+        --m2-selection-foreground: #ffffff;
         --m2-error-foreground: #cf222e;
         --m2-valid-marker-foreground: #1a7f37;
         --m2-caret-marker-foreground: #1f2328;
@@ -78,10 +96,19 @@
         --m2-cell-hover-background: #484f58;
         --m2-cell-selected-background: #58a6ff;
         --m2-menu-background: #161b22;
+        --m2-menu-foreground: #e6edf3;
         --m2-menu-border: #30363d;
         --m2-menu-shadow: rgba(0, 0, 0, .55);
         --m2-menu-selection-background: #1f6feb;
         --m2-menu-selection-foreground: #ffffff;
+        --m2-completion-kind-foreground: #8b949e;
+        --m2-control-background: #30363d;
+        --m2-control-foreground: #e6edf3;
+        --m2-control-border: #484f58;
+        --m2-control-hover-background: #3b444f;
+        --m2-focus-border: #58a6ff;
+        --m2-selection-background: #264f78;
+        --m2-selection-foreground: #ffffff;
         --m2-error-foreground: #ff7b72;
         --m2-valid-marker-foreground: #7ee787;
         --m2-caret-marker-foreground: #e6edf3;
@@ -106,10 +133,19 @@
         --m2-cell-hover-background: var(--vscode-sideBarSectionHeader-border, #454545);
         --m2-cell-selected-background: var(--vscode-focusBorder, #007fd4);
         --m2-menu-background: var(--vscode-menu-background, var(--vscode-editorWidget-background, #252526));
+        --m2-menu-foreground: var(--vscode-menu-foreground, var(--vscode-editorWidget-foreground, var(--m2-foreground)));
         --m2-menu-border: var(--vscode-menu-border, var(--vscode-editorWidget-border, #454545));
         --m2-menu-shadow: rgba(0, 0, 0, .45);
         --m2-menu-selection-background: var(--vscode-menu-selectionBackground, var(--vscode-list-activeSelectionBackground, #04395e));
         --m2-menu-selection-foreground: var(--vscode-menu-selectionForeground, var(--vscode-list-activeSelectionForeground, #ffffff));
+        --m2-completion-kind-foreground: var(--vscode-descriptionForeground, var(--m2-muted-foreground));
+        --m2-control-background: var(--vscode-button-secondaryBackground, var(--vscode-button-background, var(--m2-menu-background)));
+        --m2-control-foreground: var(--vscode-button-secondaryForeground, var(--vscode-button-foreground, var(--m2-menu-foreground)));
+        --m2-control-border: var(--vscode-button-border, var(--m2-menu-border));
+        --m2-control-hover-background: var(--vscode-button-secondaryHoverBackground, var(--vscode-button-hoverBackground, var(--m2-input-hover-background)));
+        --m2-focus-border: var(--vscode-focusBorder, #007fd4);
+        --m2-selection-background: var(--vscode-editor-selectionBackground, #264f78);
+        --m2-selection-foreground: var(--vscode-editor-selectionForeground, var(--m2-foreground));
         --m2-error-foreground: var(--vscode-errorForeground, #f48771);
         --m2-valid-marker-foreground: var(--vscode-testing-iconPassed, #73c991);
         --m2-caret-marker-foreground: var(--vscode-editor-foreground, #d4d4d4);
@@ -132,6 +168,11 @@
         max-width: 100%;
         overflow: hidden;
         width: 100%;
+      }
+
+      ::selection {
+        background: var(--m2-selection-background);
+        color: var(--m2-selection-foreground);
       }
 
       #terminal {
@@ -235,10 +276,10 @@
       }
 
       .M2CompletionMenu {
-        background: var(--vscode-editorWidget-background, #f3f3f3);
-        border: 1px solid var(--vscode-editorWidget-border, #c8c8c8);
-        box-shadow: 0 2px 8px rgba(0, 0, 0, .22);
-        color: var(--vscode-editorWidget-foreground, #222);
+        background: var(--m2-menu-background);
+        border: 1px solid var(--m2-menu-border);
+        box-shadow: 0 2px 8px var(--m2-menu-shadow);
+        color: var(--m2-menu-foreground);
         font-family: Iosevka, monospace;
         font-size: 13px;
         list-style: none;
@@ -263,19 +304,41 @@
       }
 
       .M2CompletionItem.selected {
-        background: var(--vscode-list-activeSelectionBackground, #0e639c);
-        color: var(--vscode-list-activeSelectionForeground, #fff);
+        background: var(--m2-menu-selection-background);
+        color: var(--m2-menu-selection-foreground);
       }
 
       #webviewActionBar {
+        display: flex;
+        gap: 4px;
+        padding: 4px;
         position: fixed;
         right: 0;
         top: 0;
         z-index: 10000;
       }
 
+      #webviewActionBar button {
+        background: var(--m2-control-background);
+        border: 1px solid var(--m2-control-border);
+        border-radius: 3px;
+        color: var(--m2-control-foreground);
+        cursor: pointer;
+        font: 500 11px/1 Iosevka, monospace;
+        padding: 5px 7px;
+      }
+
+      #webviewActionBar button:hover {
+        background: var(--m2-control-hover-background);
+      }
+
+      #webviewActionBar button:focus-visible {
+        outline: 1px solid var(--m2-focus-border);
+        outline-offset: 2px;
+      }
+
       .M2CompletionKind {
-        color: var(--vscode-descriptionForeground, #666);
+        color: var(--m2-completion-kind-foreground);
         font-size: 11px;
       }
 
@@ -326,7 +389,7 @@
         background: var(--m2-menu-background);
         border-color: var(--m2-menu-border);
         box-shadow: 4px 4px 3px -2px var(--m2-menu-shadow);
-        color: var(--m2-foreground);
+        color: var(--m2-menu-foreground);
       }
 
       .KatexError,
@@ -369,6 +432,11 @@
 
       .token.class-name {
         color: var(--m2-token-class);
+      }
+
+      .M2Error,
+      .M2Error .token {
+        color: var(--m2-error-foreground);
       }
     </style>
     <script type="module" nonce="${nonce}" src="${scriptUri}"></script>
