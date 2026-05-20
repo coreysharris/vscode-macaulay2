@@ -24,6 +24,7 @@ let proc: ChildProcess | undefined;
 let startReplPromise: Promise<void> | undefined;
 let procWorkingDir: string | undefined;
 let procFileSystem: M2ProcessFileSystem = { kind: "local" };
+const keepWebviewOpenOnProcessClose = new WeakSet<ChildProcess>();
 let shouldRestoreEditorFocusAfterWebviewOutput = false;
 let editorToRestoreAfterWebviewOutput: vscode.TextEditor | undefined;
 
@@ -325,8 +326,26 @@ function startM2() {
 
   child.on("close", (code, signal) => {
     console.log("M2 process closed. code=", code, "signal=", signal);
-    if (g_panel) g_panel.webview.postMessage({ type: "exit", code, signal });
-    if (proc === child) proc = undefined;
+    const closedActiveProcess = proc === child;
+    const shouldKeepWebviewOpen = keepWebviewOpenOnProcessClose.has(child);
+    keepWebviewOpenOnProcessClose.delete(child);
+
+    if (!closedActiveProcess) {
+      return;
+    }
+
+    proc = undefined;
+
+    if (shouldKeepWebviewOpen) {
+      if (g_panel) g_panel.webview.postMessage({ type: "exit", code, signal });
+      return;
+    }
+
+    if (g_panel) {
+      const panel = g_panel;
+      g_panel = undefined;
+      panel.dispose();
+    }
   });
 
   /*
@@ -511,6 +530,7 @@ function restartM2Process() {
   }
 
   const oldProc = proc;
+  keepWebviewOpenOnProcessClose.add(oldProc);
   proc = undefined;
   oldProc.once("close", () => {
     if (g_panel) {
@@ -1685,7 +1705,10 @@ function handleWebviewMessage(message: any) {
     }
     case "reset":
       console.log("reset");
-      if (proc) proc.kill();
+      if (proc) {
+        keepWebviewOpenOnProcessClose.add(proc);
+        proc.kill();
+      }
       procWorkingDir = undefined; // Reset working directory
       startM2();
       break;
