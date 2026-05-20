@@ -105,9 +105,11 @@ const Shell = function (
   let pendingErrorOutput = "";
   let pendingStandardViewHelpOutput = "";
   let interpreterDepth = 1;
+  let inputPromptIndentColumns = 0;
   const standardPromptClass = "M2StandardPrompt";
   const standardSubmittedInputClass = "M2StandardSubmittedInput";
   const standardCellClass = "M2StandardCell";
+  const continuationIndentClass = "M2ContinuationIndent";
 
   const isEmptyCell = function (el) {
     // tests if a cell is empty
@@ -449,6 +451,24 @@ const Shell = function (
   const inputSwitchesToStandardMode = function (txt: string) {
     return /(?:^|[;\n])\s*topLevelMode\s*=\s*Standard\s*(?:;|$)/.test(txt);
   };
+  const trailingLineColumns = function (txt: string) {
+    const lineStart = txt.lastIndexOf("\n") + 1;
+    return txt.substring(lineStart).replace(/\t/g, "    ").length;
+  };
+  const rememberInputPromptIndent = function () {
+    inputPromptIndentColumns = trailingLineColumns(htmlSec.textContent || "");
+  };
+  const insertContinuationIndent = function () {
+    if (!inputSpan || !htmlSec.classList.contains("M2Input")) return;
+
+    // Visual-only spacer; keep it out of inputSpan so M2 input/history stay unchanged.
+    const spacer = document.createElement("span");
+    spacer.className = continuationIndentClass;
+    spacer.contentEditable = "false";
+    spacer.setAttribute("aria-hidden", "true");
+    spacer.style.width = `${inputPromptIndentColumns}ch`;
+    htmlSec.insertBefore(spacer, inputSpan);
+  };
   const enterStandardMode = function () {
     outputMode = "standard";
     if (htmlSec && htmlSec.classList && htmlSec.classList.contains("M2Cell"))
@@ -645,9 +665,29 @@ const Shell = function (
   };
 
   const highlightMacaulay2Element = function (el: HTMLElement) {
+    const originalNodes = Array.from(el.childNodes);
+    const hasContinuationIndent = originalNodes.some(
+      (node) =>
+        node instanceof HTMLElement &&
+        node.classList.contains(continuationIndentClass),
+    );
     const text = el.textContent || "";
     el.textContent = "";
-    el.appendChild(highlightedMacaulay2Text(text));
+    if (!hasContinuationIndent) {
+      el.appendChild(highlightedMacaulay2Text(text));
+      return;
+    }
+
+    originalNodes.forEach((node) => {
+      if (
+        node instanceof HTMLElement &&
+        node.classList.contains(continuationIndentClass)
+      ) {
+        el.appendChild(node);
+      } else {
+        el.appendChild(highlightedMacaulay2Text(node.textContent || ""));
+      }
+    });
   };
 
   const highlightMacaulay2CodeElements = function (container: HTMLElement) {
@@ -1472,9 +1512,11 @@ const Shell = function (
           }
         } else if (tag === webAppTags.InputContd && inputEndFlag) {
           // continuation of input section
+          insertContinuationIndent();
           inputEndFlag = false;
         } else {
           // new section
+          if (tag === webAppTags.Input) rememberInputPromptIndent();
           createHtml(webAppClasses[tag]);
           if (
             inputSpan &&
@@ -1482,6 +1524,7 @@ const Shell = function (
           ) {
             // input section: a bit special (ends at first \n)
             attachElement(inputSpan, htmlSec); // !!! we move the input inside the current span to get proper indentation !!!
+            if (tag === webAppTags.InputContd) insertContinuationIndent();
           }
         }
       }

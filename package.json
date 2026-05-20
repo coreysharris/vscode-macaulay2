@@ -97,7 +97,7 @@
 					"type": "string",
 					"default": "",
 					"description": "Additional command-line arguments passed to M2 when starting REPL sessions.",
-					"markdownDescription": "Additional command-line arguments passed to M2 when starting REPL sessions, for example `--print-width 50`. Note: Some display changes commands will not affect the webview REPL.",
+					"markdownDescription": "Additional command-line arguments passed to M2 when starting REPL sessions, for example `--print-width 50`. \n Note: Some display changes commands will not affect the webview REPL.",
 					"scope": "window"
 				},
 				"macaulay2.executablePathAlternatives": {
