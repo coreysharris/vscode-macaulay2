@@ -103,6 +103,7 @@ const Shell = function (
   let procInputSpan = null; // temporary span containing currently processed input (for aesthetics only)
   let pendingStandardEcho = "";
   let pendingErrorOutput = "";
+  let pendingStandardViewHelpOutput = "";
   let interpreterDepth = 1;
   const standardPromptClass = "M2StandardPrompt";
   const standardSubmittedInputClass = "M2StandardSubmittedInput";
@@ -130,6 +131,31 @@ const Shell = function (
       /^[a-zA-Z]:[\\/].+\.html?$/i.test(path) ||
       (!/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(path) && /\.html?$/i.test(path))
     );
+  };
+
+  const openStandardViewHelpLinks = function (txt: string) {
+    if (outputMode !== "standard") {
+      pendingStandardViewHelpOutput = "";
+      return;
+    }
+
+    const searchText = pendingStandardViewHelpOutput + txt;
+    const re = /(?:^|\n)o\d+ = Opening\s+(\S+)/g;
+    let match: RegExpExecArray | null;
+    let consumedIndex = 0;
+
+    while ((match = re.exec(searchText)) !== null) {
+      const href = match[1];
+      if (isHtmlHelpLink(href)) {
+        openHelp(href);
+        consumedIndex = re.lastIndex;
+      }
+    }
+
+    const lastLineIndex = searchText.lastIndexOf("\n") + 1;
+    pendingStandardViewHelpOutput = searchText
+      .substring(Math.max(consumedIndex, lastLineIndex))
+      .slice(-4096);
   };
 
   const outputScrollClass = "M2OutputScroll";
@@ -178,7 +204,10 @@ const Shell = function (
 
     const output = document.createElement(standardOutput ? "div" : "span");
     output.className = outputScrollClass;
-    if (standardOutput) output.classList.add(standardOutputClass);
+    if (standardOutput) {
+      output.classList.add(standardOutputClass);
+      output.classList.add("M2Text");
+    }
     if (beforeNode) cell.insertBefore(output, beforeNode);
     else cell.appendChild(output);
     return output;
@@ -1534,6 +1563,8 @@ const Shell = function (
         );
       return;
     }
+
+    openStandardViewHelpLinks(msg);
 
     const displayTarget = function (txt: string) {
       if (!htmlSec.classList.contains("M2Cell")) return htmlSec;

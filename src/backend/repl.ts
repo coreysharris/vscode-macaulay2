@@ -125,7 +125,8 @@ export function getM2WebviewProcessArgs(
   topLevelMode: WebviewTopLevelMode = "webapp",
 ): string[] {
   const args = ["--webapp", "-e", startupExpression];
-  if (topLevelMode === "standard") args.push("-e", "topLevelMode = Standard");
+  if (topLevelMode === "standard")
+    args.push("--print-width", "120", "-e", "topLevelMode = Standard");
   return args;
 }
 

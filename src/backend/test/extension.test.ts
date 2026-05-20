@@ -344,6 +344,8 @@ suite("Executable Launch", function () {
       "--webapp",
       "-e",
       "startupPatch",
+      "--print-width",
+      "120",
       "-e",
       "topLevelMode = Standard",
     ]);
