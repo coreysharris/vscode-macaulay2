@@ -2,20 +2,22 @@
 	"name": "macaulay2",
 	"displayName": "Macaulay2",
 	"description": "Macaulay2 language support",
-	"version": "0.0.4",
+	"version": "0.9.0",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/coreysharris/vscode-macaulay2"
 	},
 	"publisher": "coreysharris",
 	"engines": {
-		"vscode": "^1.36.0"
+		"vscode": "^1.100.0"
 	},
 	"categories": [
 		"Programming Languages"
 	],
 	"activationEvents": [
-		"onLanguage:macaulay2"
+		"onLanguage:macaulay2",
+		"onCommand:macaulay2.openGettingStartedExample",
+		"onStartupFinished"
 	],
 	"main": "./out/extension.js",
 	"contributes": {
@@ -25,8 +27,29 @@
 				"title": "Start M2 REPL"
 			},
 			{
-				"command": "macaulay2.sendToREPL",
-				"title": "Send code to Macaulay2 REPL"
+				"command": "macaulay2.startTerminal",
+				"title": "Start M2 Terminal"
+			},
+			{
+				"command": "macaulay2.sendToWebview",
+				"title": "Send Line or Selection to Macaulay2 Webview"
+			},
+			{
+				"command": "macaulay2.sendToTerminal",
+				"title": "Send Line or Selection to Macaulay2 Terminal"
+			},
+			{
+				"command": "macaulay2.runFile",
+				"title": "Run Macaulay2 File",
+				"icon": "$(play)"
+			},
+			{
+				"command": "macaulay2.interruptREPL",
+				"title": "Interrupt M2 Computation"
+			},
+			{
+				"command": "macaulay2.selectExecutablePath",
+				"title": "Select M2 Executable"
 			}
 		],
 		"grammars": [
@@ -34,6 +57,16 @@
 				"language": "macaulay2",
 				"scopeName": "source.macaulay2",
 				"path": "./syntaxes/macaulay2.tmLanguage.json"
+			},
+			{
+				"scopeName": "markdown.macaulay2.codeblock",
+				"path": "./syntaxes/codeblock.json",
+				"injectTo": [
+					"text.html.markdown"
+				],
+				"embeddedLanguages": {
+					"meta.embedded.block.macaulay2": "macaulay2"
+				}
 			}
 		],
 		"languages": [
@@ -44,7 +77,9 @@
 					"macaulay2"
 				],
 				"extensions": [
-					".m2"
+					".m2",
+					".d",
+					".dd"
 				],
 				"configuration": "./language-configuration.json"
 			}
@@ -54,35 +89,205 @@
 			"properties": {
 				"macaulay2.executablePath": {
 					"type": "string",
-					"default": "/Applications/Macaulay2-1.13/bin/m2",
-					"description": "Location of Macaulay2 executable",
+					"default": "",
+					"description": "Optional override for the Macaulay2 executable. Leave empty to auto-detect it.",
 					"scope": "application"
+				},
+				"macaulay2.launchArgs": {
+					"type": "string",
+					"default": "",
+					"description": "Additional command-line arguments passed to M2 when starting REPL sessions.",
+					"markdownDescription": "Additional command-line arguments passed to M2 when starting REPL sessions, for example `--print-width 50`. \n Note: Some display changes commands will not affect the webview REPL.",
+					"scope": "window"
+				},
+				"macaulay2.executablePathAlternatives": {
+					"type": "array",
+					"default": [],
+					"items": {
+						"type": "string"
+					},
+					"description": "Additional Macaulay2 executables to show in the executable switcher. The active executablePath and auto-detect option are always included.",
+					"scope": "application"
+				},
+				"macaulay2.showExecutableSwitcher": {
+					"type": "boolean",
+					"default": false,
+					"description": "Show a status bar button for quickly switching the Macaulay2 executable.",
+					"scope": "application"
+				},
+				"macaulay2.webviewColorTheme": {
+					"type": "string",
+					"default": "vscode",
+					"enum": [
+						"classic",
+						"light",
+						"dark",
+						"vscode"
+					],
+					"enumDescriptions": [
+						"Use the original Macaulay2 webview colors.",
+						"Use a neutral light color theme.",
+						"Use a dark color theme.",
+						"Follow the active VS Code editor colors where available."
+					],
+					"description": "Controls the color theme used by the Macaulay2 webview REPL.",
+					"scope": "window"
+				},
+				"macaulay2.webviewTopLevelMode": {
+					"type": "string",
+					"default": "webapp",
+					"enum": [
+						"webapp",
+						"standard"
+					],
+					"enumDescriptions": [
+						"Start the webview REPL in Macaulay2 WebApp output mode.",
+						"Start the webview REPL with `topLevelMode = Standard`."
+					],
+					"description": "Controls the top-level output mode used by the Macaulay2 webview REPL.",
+					"scope": "window"
 				}
+			}
+		},
+		"configurationDefaults": {
+			"[macaulay2]": {
+				"editor.detectIndentation": false,
+				"editor.insertSpaces": false,
+				"editor.tabSize": 8
 			}
 		},
 		"keybindings": [
 			{
-				"command": "macaulay2.sendToREPL",
-				"key": "alt+Enter"
+				"command": "macaulay2.sendToWebview",
+				"key": "shift+Enter",
+				"when": "editorTextFocus && editorLangId == macaulay2"
+			},
+			{
+				"command": "macaulay2.sendToWebview",
+				"key": "ctrl+enter",
+				"when": "editorTextFocus && editorLangId == macaulay2"
 			},
 			{
 				"command": "macaulay2.startREPL",
 				"key": "F12"
+			},
+			{
+				"command": "macaulay2.interruptREPL",
+				"key": "ctrl+c",
+				"when": "activeWebviewPanelId == 'macaulay2Output'"
 			}
-		]
+		],
+		"walkthroughs": [
+			{
+				"id": "gettingStarted",
+				"title": "Get Started with Macaulay2",
+				"description": "Start a Macaulay2 REPL, send code from `.m2` files, and configure the extension.",
+				"steps": [
+					{
+						"id": "startRepl",
+						"title": "Start a REPL",
+						"description": "Open a Macaulay2 REPL in either the webview or a terminal.\n\n[Start M2 REPL](command:macaulay2.startREPL)\n\nIf the extension failed to find your Macaulay2 executable automatically, you can configure the path here: \n\n[Select M2 Executable](command:macaulay2.selectExecutablePath)",
+						"media": {
+							"markdown": "walkthroughs/start-repl.md"
+						},
+						"completionEvents": [
+							"onCommand:macaulay2.startREPL"
+						]
+					},
+					{
+						"id": "sendCode",
+						"title": "Send Code",
+						"description": "Send selected code to the webview REPL with `Shift+Enter` or `Ctrl+Enter`, or run the whole file from the button in the top right. \n\n[Open Example File](command:macaulay2.openGettingStartedExample)",
+						"media": {
+							"markdown": "walkthroughs/send-code.md"
+						},
+						"completionEvents": [
+							"onCommand:macaulay2.runFile",
+							"onCommand:macaulay2.sendToWebview",
+							"onCommand:macaulay2.sendToTerminal"
+						]
+					},
+					{
+						"id": "configureM2",
+						"title": "Configure Extension",
+						"description": "You can change the start up behavior, visual theme, and other settings.\n\n[Open Macaulay2 Settings](command:workbench.action.openSettings?%5B%22%40ext%3AM2.macaulay2%22%5D)\n\nAll keybindings can be viewed and edited.\n\n[Open Macaulay2 Keyboard Shortcuts](command:workbench.action.openGlobalKeybindings?%5B%22%40ext%3Am2.macaulay2%22%5D)",
+						"media": {
+							"markdown": "walkthroughs/configure-m2.md"
+						},
+						"completionEvents": [
+							"onCommand:macaulay2.selectExecutablePath",
+							"onSettingChanged:macaulay2.executablePath"
+						]
+					}
+				]
+			}
+		],
+		"menus": {
+			"editor/title": [
+				{
+					"command": "macaulay2.runFile",
+					"when": "resourceLangId == macaulay2",
+					"group": "navigation@1"
+				}
+			],
+			"editor/context": [
+				{
+					"command": "macaulay2.sendToTerminal",
+					"when": "editorLangId == macaulay2",
+					"group": "1_modification@5"
+				},
+				{
+					"command": "macaulay2.sendToWebview",
+					"when": "editorLangId == macaulay2",
+					"group": "1_modification@6"
+				}
+			]
+		},
+		"problemMatchers": [
+			{
+				"name": "macaulay2",
+				"pattern": {
+					"regexp": "^(.+\\.m2):(\\d+):(\\d+):\\s*(.*?)$",
+					"file": 1,
+					"line": 2,
+					"column": 3,
+					"message": 4
+				},
+				"background": {
+					"activeOnStart": true,
+					"beginsPattern": ".*",
+					"endsPattern": ".*"
+				}
+			}
+		],
+		"markdown.markdownItPlugins": true
 	},
 	"scripts": {
 		"vscode:prepublish": "npm run compile",
-		"compile": "tsc -p ./",
-		"watch": "tsc -watch -p ./",
-		"test": "npm run compile && node ./node_modules/vscode/bin/test"
+		"compile": "tsc -p tsconfig.backend.json && tsc -p tsconfig.webview.json",
+		"watch-backend": "tsc -w -p tsconfig.backend.json --pretty false --preserveWatchOutput",
+		"watch-webview": "tsc -w -p tsconfig.webview.json --pretty false --preserveWatchOutput",
+		"watch": "npm-run-all --parallel watch-backend watch-webview",
+		"clean": "rimraf node_modules out dist package-lock.json",
+		"test": "rimraf out/test && npm run compile && vscode-test",
+		"update": "M2 --script generate-grammar.m2",
+		"format": "prettier --write src/*/*.ts"
 	},
 	"devDependencies": {
-		"typescript": "^3.3.1",
-		"vscode-test": "^1.0.0",
-		"@types/vscode": "^1.36.0",
-		"tslint": "^5.12.1",
+		"@types/mocha": "^2.2.48",
 		"@types/node": "^10.12.21",
-		"@types/mocha": "^2.2.42"
+		"@types/vscode": "^1.100.0",
+		"@vscode/test-cli": "^0.0.10",
+		"@vscode/test-electron": "^2.5.2",
+		"npm-run-all": "^4.1.5",
+		"rimraf": "^6.0.1",
+		"tslint": "^5.12.1",
+		"typescript": "^5.4.0",
+		"prettier": "^3.5.3"
+	},
+	"dependencies": {
+		"highlight.js": "^11.11.1",
+		"highlightjs-macaulay2": "^0.4.2",
+		"katex": "^0.16.47"
 	}
 }

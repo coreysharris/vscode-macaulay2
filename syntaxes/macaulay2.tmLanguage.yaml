@@ -4,6 +4,7 @@ fileTypes: [m2]
 
 patterns:
 - include: '#comments'
+- include: '#documentation'
 - include: '#strings'
 - include: '#keywords'
 - include: '#support'
@@ -38,11 +39,22 @@ repository:
         patterns:
           - name: constant.character.escape.macaulay2
             match: "\\\\."
-      - name: string.tripleslash.macaulay2
+  documentation:
+    patterns:
+      - name: meta.documentation.tripleslash.macaulay2
         begin: "///"
+        beginCaptures:
+          '0':
+            name: punctuation.definition.documentation.begin.macaulay2
         end: "///"
-      # - name: string.tripleslash2.macaulay2
-      #   match: "///\\(/?/?[^/]\\|\\(//\\)*////[^/]\\)*\\(//\\)*///"
+        endCaptures:
+          '0':
+            name: punctuation.definition.documentation.end.macaulay2
+        patterns:
+          - include: '#comments'
+          - include: '#strings'
+          - include: '#keywords'
+          - include: '#support'
   comments:
     patterns:
       - name: comment.line.double-dash.macaulay2
