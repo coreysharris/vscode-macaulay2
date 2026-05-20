@@ -133,7 +133,32 @@ const Shell = function (
   };
 
   const outputScrollClass = "M2OutputScroll";
+  const outputScrollScrollableClass = "M2OutputScrollScrollable";
   const standardOutputClass = "M2StandardOutput";
+
+  const updateOutputScrollState = function (output: Element) {
+    if (!(output instanceof HTMLElement)) return;
+
+    output.classList.toggle(
+      outputScrollScrollableClass,
+      output.scrollWidth > output.clientWidth + 1,
+    );
+  };
+
+  const queueOutputScrollStateUpdate = function (output: HTMLElement) {
+    updateOutputScrollState(output);
+    window.requestAnimationFrame(() => updateOutputScrollState(output));
+  };
+
+  const updateAllOutputScrollStates = function () {
+    Array.from(terminal.querySelectorAll(`.${outputScrollClass}`)).forEach(
+      updateOutputScrollState,
+    );
+  };
+
+  window.addEventListener("resize", () =>
+    window.requestAnimationFrame(updateAllOutputScrollStates),
+  );
 
   const outputScrollContainer = function (
     cell: HTMLElement,
@@ -1334,8 +1359,14 @@ const Shell = function (
       if (url) openHelp(url);
     }
     htmlSec.removeAttribute("data-code");
-    if (htmlSec.classList.contains("M2Html") && anc.classList.contains("M2Cell"))
-      outputScrollContainer(anc, htmlSec).appendChild(htmlSec);
+    if (
+      htmlSec.classList.contains("M2Html") &&
+      anc.classList.contains("M2Cell")
+    ) {
+      const output = outputScrollContainer(anc, htmlSec);
+      output.appendChild(htmlSec);
+      queueOutputScrollStateUpdate(output);
+    }
     if (anc.classList.contains("M2Html") && anc.dataset.code != "") {
       // stack
       // in case it's inside TeX, we compute dimensions
@@ -1609,6 +1640,7 @@ const Shell = function (
       const node = document.createTextNode(msg);
       appendNode(node);
     }
+    if (target != htmlSec) queueOutputScrollStateUpdate(target);
   };
 
   obj.reset = function () {
