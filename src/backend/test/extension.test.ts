@@ -225,6 +225,79 @@ suite("Macaulay2 Formatter", function () {
     );
   });
 
+  test("keeps Macaulay2 operators containing equals intact", function () {
+    const operators = [
+      "===>=",
+      "_<=",
+      "|-=",
+      "=!=",
+      "|_=",
+      "!=",
+      "@@=",
+      "=",
+      "..<=",
+      "|=",
+      "===>",
+      ":=",
+      "*=",
+      "??=",
+      "//=",
+      "_>=",
+      "==>=",
+      "^<=",
+      "\\=",
+      "+=",
+      ">>=",
+      "^^=",
+      "..=",
+      "~=",
+      "<=",
+      "\u2298=",
+      "<==>=",
+      "===",
+      "^>=",
+      "==>",
+      "^=",
+      "\u29e2=",
+      "==",
+      "=>",
+      "\u00b7=",
+      "-=",
+      "%=",
+      "\\\\=",
+      "||=",
+      "<<=",
+      "_=",
+      ">=",
+      "&=",
+      "<==",
+      "++=",
+      "@@?=",
+      "^**=",
+      "<===",
+      "<==>",
+      "/=",
+      "**=",
+      "@=",
+    ];
+    const input = operators.map((operator) => `left${operator}right`).join("\n");
+    const expected = operators
+      .map((operator) => `left ${operator} right`)
+      .concat("")
+      .join("\n");
+
+    assert.equal(formatMacaulay2Text(input, { tabSize: 2 }), expected);
+  });
+
+  test("keeps formatted Macaulay2 operators without equals intact", function () {
+    const input = ["f=(x,y)->x++y", "g(a,b;c)"].join("\n");
+
+    assert.equal(
+      formatMacaulay2Text(input, { tabSize: 2 }),
+      ["f = (x, y) -> x ++ y", "g(a, b; c)", ""].join("\n"),
+    );
+  });
+
   test("does not rewrite documentation blocks", function () {
     const input = ["///", "x=1--not code", "///", "z=1"].join("\n");
 
