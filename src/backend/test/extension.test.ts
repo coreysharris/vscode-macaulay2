@@ -26,6 +26,7 @@ import {
   wslPathToWindowsPath,
 } from "../executablePath";
 import {
+  getM2OutputFileLocationLinks,
   getM2StartupPatch,
   getM2TerminalProcessArgs,
   getM2WebviewProcessArgs,
@@ -289,6 +290,34 @@ suite("Executable Switcher", function () {
 });
 
 suite("Executable Launch", function () {
+  test("finds Macaulay2 source locations in output", function () {
+    const links = getM2OutputFileLocationLinks(
+      "The source of this document is in Macaulay2Doc/functions/det-doc.m2:25:0.",
+    );
+
+    assert.deepEqual(links, [
+      {
+        index: "The source of this document is in ".length,
+        text: "Macaulay2Doc/functions/det-doc.m2:25:0",
+        target: "Macaulay2Doc/functions/det-doc.m2#25:0",
+      },
+    ]);
+  });
+
+  test("finds Macaulay2 source ranges in output", function () {
+    const links = getM2OutputFileLocationLinks(
+      "/opt/homebrew/share/Macaulay2/Core/files.m2:189:15-189:31: --source code",
+    );
+
+    assert.deepEqual(links, [
+      {
+        index: 0,
+        text: "/opt/homebrew/share/Macaulay2/Core/files.m2:189:15-189:31",
+        target: "/opt/homebrew/share/Macaulay2/Core/files.m2#189:15-189:31",
+      },
+    ]);
+  });
+
   test("patches method function code output for WebApp mode", function () {
     const patch = getM2StartupPatch();
 

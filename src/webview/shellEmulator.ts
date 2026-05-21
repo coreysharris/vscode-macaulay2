@@ -167,6 +167,98 @@ const Shell = function (
       .slice(-4096);
   };
 
+  const getM2FileLocationLinks = function (txt: string) {
+    const re =
+      /((?:[A-Za-z]:[\\/])?[^\s:"'<>]+\.m2):(\d+)(?::(\d+))?(?:-(\d+)(?::(\d+))?)?/g;
+    const links: {
+      index: number;
+      text: string;
+      target: string;
+    }[] = [];
+    let match: RegExpExecArray | null;
+
+    while ((match = re.exec(txt)) !== null) {
+      const [, filePath, lineNum, colNum, endLineNum, endColNum] = match;
+      let target = filePath + "#" + lineNum;
+      if (colNum !== undefined) target += ":" + colNum;
+      if (endLineNum !== undefined) {
+        target += "-" + endLineNum;
+        if (endColNum !== undefined) target += ":" + endColNum;
+      }
+      links.push({
+        index: match.index,
+        text: match[0],
+        target,
+      });
+    }
+
+    return links;
+  };
+  const shouldSkipM2FileLocationTextNode = function (node: Node) {
+    const parent = node.parentElement;
+    if (!parent) return true;
+    if (parent.closest("a")) return true;
+    return !!parent.closest("script, style, textarea, .M2Input");
+  };
+  const linkifyM2FileLocationTextNode = function (node: Text) {
+    const text = node.nodeValue || "";
+    const links = getM2FileLocationLinks(text);
+    if (links.length === 0) return;
+
+    const fragment = document.createDocumentFragment();
+    let lastIndex = 0;
+
+    for (const linkInfo of links) {
+      if (linkInfo.index > lastIndex) {
+        fragment.appendChild(
+          document.createTextNode(text.substring(lastIndex, linkInfo.index)),
+        );
+      }
+
+      const link = document.createElement("a");
+      link.textContent = linkInfo.text;
+      link.href = linkInfo.target;
+      link.title = "Open source";
+      link.style.textDecoration = "underline";
+      link.style.cursor = "pointer";
+      link.dataset.macaulay2SourceLocation = "true";
+      link.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        emit("open", linkInfo.target);
+      };
+      fragment.appendChild(link);
+      lastIndex = linkInfo.index + linkInfo.text.length;
+    }
+
+    if (lastIndex < text.length) {
+      fragment.appendChild(document.createTextNode(text.substring(lastIndex)));
+    }
+
+    node.replaceWith(fragment);
+  };
+  const linkifyM2FileLocations = function (container: Node) {
+    container.normalize();
+    const walker = document.createTreeWalker(
+      container,
+      NodeFilter.SHOW_TEXT,
+      {
+        acceptNode(node) {
+          return shouldSkipM2FileLocationTextNode(node)
+            ? NodeFilter.FILTER_REJECT
+            : NodeFilter.FILTER_ACCEPT;
+        },
+      },
+    );
+    const textNodes: Text[] = [];
+    let node = walker.nextNode();
+    while (node) {
+      textNodes.push(node as Text);
+      node = walker.nextNode();
+    }
+    textNodes.forEach(linkifyM2FileLocationTextNode);
+  };
+
   const outputScrollClass = "M2OutputScroll";
   const outputScrollScrollableClass = "M2OutputScrollScrollable";
   const standardOutputClass = "M2StandardOutput";
@@ -1413,6 +1505,7 @@ const Shell = function (
       renderMathInHtml(htmlSec);
       highlightMacaulay2CodeElements(htmlSec);
       initializeVectorGraphics(htmlSec);
+      linkifyM2FileLocations(htmlSec);
       // syntax highlighting code
       /*
       Array.from(
@@ -1720,60 +1813,40 @@ const Shell = function (
       else target.appendChild(node);
     };
 
-    // Check if the message contains file paths with line numbers (Macaulay2 error format)
-    // Common patterns: "filename.m2:123:" or "filename.m2:123:456:"
-    const errorPattern = /([^\s:]+\.m2):(\d+)(?::(\d+))?:/g;
-
-    if (errorPattern.test(msg)) {
-      // Reset regex lastIndex for next use
-      errorPattern.lastIndex = 0;
-
+    const fileLocationLinks = getM2FileLocationLinks(msg);
+    if (fileLocationLinks.length > 0) {
       let lastIndex = 0;
-      let match;
 
-      while ((match = errorPattern.exec(msg)) !== null) {
-        // Add text before the match
-        if (match.index > lastIndex) {
-          const textBefore = msg.substring(lastIndex, match.index);
-          const textNode = document.createTextNode(textBefore);
-          appendNode(textNode);
-        }
+      for (const fileLocationLink of fileLocationLinks) {
+        if (fileLocationLink.index > lastIndex)
+          appendNode(
+            document.createTextNode(
+              msg.substring(lastIndex, fileLocationLink.index),
+            ),
+          );
 
-        // Create clickable link for the file path
-        const [fullMatch, filePath, lineNum, colNum] = match;
         const link = document.createElement("a");
-        link.textContent = fullMatch;
+        link.textContent = fileLocationLink.text;
         link.href = "#";
+        link.title = "Open source";
         link.style.textDecoration = "underline";
         link.style.cursor = "pointer";
-
-        // Build the VS Code fragment (file#line:column format)
-        let fragment = filePath + "#" + lineNum;
-        if (colNum) {
-          fragment += ":" + colNum;
-        }
-
         link.onclick = (e) => {
           e.preventDefault();
-          emit("open", fragment);
+          emit("open", fileLocationLink.target);
         };
-
         appendNode(link);
 
-        lastIndex = match.index + fullMatch.length;
+        lastIndex = fileLocationLink.index + fileLocationLink.text.length;
       }
 
-      // Add remaining text after the last match
-      if (lastIndex < msg.length) {
-        const textAfter = msg.substring(lastIndex);
-        const textNode = document.createTextNode(textAfter);
-        appendNode(textNode);
-      }
+      if (lastIndex < msg.length)
+        appendNode(document.createTextNode(msg.substring(lastIndex)));
     } else {
-      // No error patterns found, display text normally
       const node = document.createTextNode(msg);
       appendNode(node);
     }
+    linkifyM2FileLocations(target);
     if (target != htmlSec) queueOutputScrollStateUpdate(target);
   };
 
