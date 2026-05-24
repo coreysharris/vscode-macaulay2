@@ -89,6 +89,11 @@ export function activate(context: vscode.ExtensionContext) {
   repl.activate(context, getWebviewCompletionItems);
   formatter.activate(context);
   context.subscriptions.push(client);
+  context.subscriptions.push(
+    vscode.commands.registerCommand("macaulay2.restartLanguageServer", () =>
+      client.restart()
+    )
+  );
   client.start().catch((error) => {
     void vscode.window.showErrorMessage(
       `Failed to start Macaulay2 Language Server: ${error instanceof Error ? error.message : String(error)}`

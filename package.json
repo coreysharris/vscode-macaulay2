@@ -51,6 +51,11 @@
 			{
 				"command": "macaulay2.selectExecutablePath",
 				"title": "Select M2 Executable"
+			},
+			{
+				"command": "macaulay2.restartLanguageServer",
+				"title": "Restart Language Server",
+				"category": "Macaulay2"
 			}
 		],
 		"grammars": [
