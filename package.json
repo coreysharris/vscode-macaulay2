@@ -93,6 +93,12 @@
 		"configuration": {
 			"title": "Macaulay2",
 			"properties": {
+				"macaulay2.enableLanguageServer": {
+					"type": "boolean",
+					"default": true,
+					"description": "Enable the Macaulay2 Language Server for enhanced language support (hover, signature help, etc.). Requires M2-language-server to be installed.",
+					"scope": "window"
+				},
 				"macaulay2.executablePath": {
 					"type": "string",
 					"default": "",
