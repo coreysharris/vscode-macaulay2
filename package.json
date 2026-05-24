@@ -271,12 +271,10 @@
 		"markdown.markdownItPlugins": true
 	},
 	"scripts": {
-		"vscode:prepublish": "npm run compile",
-		"compile": "tsc -p tsconfig.backend.json && tsc -p tsconfig.webview.json && npm run check-webview-assets",
+		"vscode:prepublish": "node esbuild.js --production",
+		"compile": "node esbuild.js && npm run check-webview-assets",
 		"check-webview-assets": "node scripts/check-webview-assets.js",
-		"watch-backend": "tsc -w -p tsconfig.backend.json --pretty false --preserveWatchOutput",
-		"watch-webview": "tsc -w -p tsconfig.webview.json --pretty false --preserveWatchOutput",
-		"watch": "npm-run-all --parallel watch-backend watch-webview",
+		"watch": "node esbuild.js --watch",
 		"clean": "rimraf node_modules out dist package-lock.json",
 		"test": "rimraf out/test && npm run compile && vscode-test",
 		"update": "M2 --script generate-grammar.m2",
@@ -288,15 +286,13 @@
 		"@types/vscode": "^1.100.0",
 		"@vscode/test-cli": "^0.0.10",
 		"@vscode/test-electron": "^2.5.2",
-		"npm-run-all": "^4.1.5",
-		"rimraf": "^6.0.1",
-		"tslint": "^5.12.1",
-		"typescript": "^5.4.0",
-		"prettier": "^3.5.3"
-	},
-	"dependencies": {
+		"esbuild": "^0.28.0",
 		"highlight.js": "^11.11.1",
 		"highlightjs-macaulay2": "^0.4.2",
-		"katex": "^0.16.47"
+		"katex": "^0.16.47",
+		"prettier": "^3.5.3",
+		"rimraf": "^6.0.1",
+		"tslint": "^5.12.1",
+		"typescript": "^5.4.0"
 	}
 }
