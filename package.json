@@ -152,8 +152,8 @@
 		"configurationDefaults": {
 			"[macaulay2]": {
 				"editor.detectIndentation": false,
-				"editor.insertSpaces": false,
-				"editor.tabSize": 8
+				"editor.insertSpaces": true,
+				"editor.tabSize": 4
 			}
 		},
 		"keybindings": [
