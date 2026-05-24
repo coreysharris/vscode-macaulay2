@@ -5,6 +5,7 @@
 import * as vscode from "vscode";
 import * as repl from "./repl";
 import * as formatter from "./formatter";
+import client from "./client";
 import hljs from "highlight.js/lib/core";
 import hljsM2 from "highlightjs-macaulay2";
 
@@ -87,6 +88,12 @@ export function activate(context: vscode.ExtensionContext) {
 
   repl.activate(context, getWebviewCompletionItems);
   formatter.activate(context);
+  context.subscriptions.push(client);
+  client.start().catch((error) => {
+    void vscode.window.showErrorMessage(
+      `Failed to start Macaulay2 Language Server: ${error instanceof Error ? error.message : String(error)}`
+    );
+  });
 
   return {
     // markdown-it plugin to highlight m2 code in markdown previews
@@ -108,6 +115,7 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 // this method is called when your extension is deactivated
-export function deactivate() {
+export function deactivate(): Thenable<void> | undefined {
   repl.deactivate();
+  return client.stop();
 }
