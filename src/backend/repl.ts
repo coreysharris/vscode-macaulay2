@@ -29,6 +29,7 @@ let terminalWorkingDir: string | undefined;
 let terminalFileSystem: M2ProcessFileSystem = { kind: "local" };
 let terminalSourceSearchRoots: string[] = [];
 const keepWebviewOpenOnProcessClose = new WeakSet<ChildProcess>();
+const closeWebviewOnProcessClose = new WeakSet<ChildProcess>();
 let shouldRestoreEditorFocusAfterWebviewOutput = false;
 let editorToRestoreAfterWebviewOutput: vscode.TextEditor | undefined;
 
@@ -67,6 +68,8 @@ type M2PathResolutionContext = {
   sourceSearchRoots: string[];
 };
 
+const defaultWebviewMatrixKatexMaxEntries = 2500;
+
 export type M2OutputFileLocationLink = {
   index: number;
   text: string;
@@ -97,7 +100,18 @@ const helpPanels = new Set<HelpPanelState>();
 // styled Hypertext form. WebApp also overrides some texMath methods through
 // html, which can recurse back into texMath; restore direct LaTeX paths for
 // affected core types.
-export function getM2StartupPatch(): string {
+function normalizeWebviewMatrixKatexMaxEntries(value: number): number {
+  return Number.isFinite(value) && value >= 0
+    ? Math.floor(value)
+    : defaultWebviewMatrixKatexMaxEntries;
+}
+
+export function getM2StartupPatch(
+  matrixKatexMaxEntries = defaultWebviewMatrixKatexMaxEntries,
+): string {
+  const normalizedMatrixKatexMaxEntries =
+    normalizeWebviewMatrixKatexMaxEntries(matrixKatexMaxEntries);
+
   return [
     "try (",
     "local toURLFun, urlEncodeFun, htmlLiteralFun;",
@@ -127,6 +141,13 @@ export function getM2StartupPatch(): string {
     "topLevelMode = oldTopLevelMode;",
     "result);",
     ') else printerr "warning: VS Code capture fallback could not be installed";',
+    "try (",
+    `vscodeM2ExtensionMatrixKatexMaxEntries = ${normalizedMatrixKatexMaxEntries};`,
+    "vscodeM2ExtensionOriginalHtmlMatrix = lookup(html, Matrix);",
+    "html Matrix := m -> if numRows m * numColumns m > vscodeM2ExtensionMatrixKatexMaxEntries then html net m else vscodeM2ExtensionOriginalHtmlMatrix m;",
+    "vscodeM2ExtensionOriginalHtmlMutableMatrix = lookup(html, MutableMatrix);",
+    "html MutableMatrix := m -> if numRows m * numColumns m > vscodeM2ExtensionMatrixKatexMaxEntries then html net m else vscodeM2ExtensionOriginalHtmlMutableMatrix m;",
+    ') else printerr "warning: VS Code large matrix HTML fallback could not be installed";',
     'try (local lit; lit = value (Core#"private dictionary")#"texMathLiteral"; texMath Type := x -> "\\\\texttt{" | lit toString x | "}") else printerr "warning: VS Code texMath Type fallback could not be installed";',
     'try (local lit; lit = value (Core#"private dictionary")#"texMathLiteral"; texMath Ring := x -> if x.?texMath then x.texMath else "\\\\texttt{" | lit toString x | "}") else printerr "warning: VS Code texMath Ring fallback could not be installed";',
     "try (",
@@ -158,7 +179,7 @@ export function getM2StartupPatch(): string {
 }
 
 function getM2StartupExpression(): string {
-  return getM2StartupPatch();
+  return getM2StartupPatch(getWebviewMatrixKatexMaxEntries());
 }
 
 export function getM2WebviewProcessArgs(
@@ -197,6 +218,17 @@ function getWebviewTopLevelMode(): WebviewTopLevelMode {
     .getConfiguration("macaulay2")
     .get<string>("webviewTopLevelMode", "webapp");
   return configuredMode === "standard" ? "standard" : "webapp";
+}
+
+function getWebviewMatrixKatexMaxEntries(): number {
+  const configuredLength = vscode.workspace
+    .getConfiguration("macaulay2")
+    .get<number>(
+      "webviewMatrixKatexMaxEntries",
+      defaultWebviewMatrixKatexMaxEntries,
+    );
+
+  return normalizeWebviewMatrixKatexMaxEntries(configuredLength);
 }
 
 function postWebviewSettings() {
@@ -366,6 +398,78 @@ function normalizeM2Input(text: string): string {
   return text;
 }
 
+export function shouldCloseWebviewOnM2Input(text: string): boolean {
+  const executableLines = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !line.startsWith("--"));
+
+  if (executableLines.length !== 1) {
+    return false;
+  }
+
+  return /^(?:exit|quit)(?:\s*\(\s*-?\d*\s*\)|\s+-?\d+)?\s*;?$/.test(
+    executableLines[0],
+  );
+}
+
+export function getM2ProcessExitMessage(
+  code: number | null,
+  signal: string | null,
+): string {
+  const detail =
+    signal !== null
+      ? `signal ${signal}`
+      : code !== null
+        ? `exit code ${code}`
+        : "unknown status";
+
+  return `\n[Macaulay2 process exited with ${detail}. Submit input to start a new session.]\n`;
+}
+
+function processInputStreamIsWritable(child: ChildProcess): boolean {
+  const stdin = child.stdin as any;
+  return (
+    !!stdin &&
+    stdin.writable !== false &&
+    stdin.destroyed !== true &&
+    stdin.writableEnded !== true
+  );
+}
+
+function postM2ProcessExitMessage(
+  code: number | null,
+  signal: string | null,
+) {
+  if (!g_panel) return;
+
+  g_panel.webview.postMessage({
+    type: "output",
+    data: getM2ProcessExitMessage(code, signal),
+  });
+}
+
+function postM2InputWriteFailureMessage(error: Error) {
+  if (!g_panel) return;
+
+  g_panel.webview.postMessage({
+    type: "output",
+    data: `\n[Could not send input to Macaulay2: ${error.message}. Submit input again to start a new session.]\n`,
+  });
+}
+
+function handleM2StdinError(child: ChildProcess, error: Error) {
+  console.error("M2 stdin error:", error);
+  if (proc !== child) {
+    return;
+  }
+
+  proc = undefined;
+  closeWebviewOnProcessClose.delete(child);
+  keepWebviewOpenOnProcessClose.delete(child);
+  postM2InputWriteFailureMessage(error);
+}
+
 function startM2() {
   const resolution = getM2ExecutableResolution();
   if (!resolution) {
@@ -413,6 +517,10 @@ function startM2() {
       });
   });
 
+  if (child.stdin) {
+    child.stdin.on("error", (err) => handleM2StdinError(child, err));
+  }
+
   child.on("error", (err) => {
     console.error("M2 process error:", err);
     if (g_panel)
@@ -427,26 +535,31 @@ function startM2() {
     console.log("M2 process closed. code=", code, "signal=", signal);
     const closedActiveProcess = proc === child;
     const shouldKeepWebviewOpen = keepWebviewOpenOnProcessClose.has(child);
+    const shouldCloseWebview = closeWebviewOnProcessClose.has(child);
     keepWebviewOpenOnProcessClose.delete(child);
+    closeWebviewOnProcessClose.delete(child);
 
     if (!closedActiveProcess) {
       return;
     }
 
     proc = undefined;
-    procWorkingDir = undefined;
-    procSourceSearchRoots = [];
 
     if (shouldKeepWebviewOpen) {
       if (g_panel) g_panel.webview.postMessage({ type: "exit", code, signal });
       return;
     }
 
-    if (g_panel) {
+    if (shouldCloseWebview && g_panel) {
       const panel = g_panel;
       g_panel = undefined;
+      procWorkingDir = undefined;
+      procSourceSearchRoots = [];
       panel.dispose();
+      return;
     }
+
+    postM2ProcessExitMessage(code, signal);
   });
 
   /*
@@ -523,9 +636,9 @@ async function startREPLOnce(preserveFocus: boolean) {
         if (proc) {
           proc.kill();
           proc = undefined;
-          procWorkingDir = undefined;
-          procSourceSearchRoots = [];
         }
+        procWorkingDir = undefined;
+        procSourceSearchRoots = [];
       });
     }
   }
@@ -546,7 +659,11 @@ async function executeCode(
   await startREPL(true);
 
   text = normalizeM2Input(text);
-  if (proc && proc.stdin) {
+  if (proc && proc.stdin && processInputStreamIsWritable(proc)) {
+    const child = proc;
+    if (shouldCloseWebviewOnM2Input(text)) {
+      closeWebviewOnProcessClose.add(child);
+    }
     shouldRestoreEditorFocusAfterWebviewOutput = restoreEditorFocus;
     editorToRestoreAfterWebviewOutput = editorToRestore;
     if (recordSubmittedInput && g_panel) {
@@ -555,7 +672,11 @@ async function executeCode(
         data: text,
       });
     }
-    proc.stdin.write(text);
+    proc.stdin.write(text, (err) => {
+      if (err) {
+        handleM2StdinError(child, err);
+      }
+    });
   } else {
     vscode.window.showErrorMessage("Macaulay2 process is not running.");
   }

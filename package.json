@@ -146,6 +146,13 @@
 					],
 					"description": "Controls the top-level output mode used by the Macaulay2 webview REPL.",
 					"scope": "window"
+				},
+				"macaulay2.webviewMatrixKatexMaxEntries": {
+					"type": "number",
+					"default": 2500,
+					"minimum": 0,
+					"description": "Maximum matrix entries the webview REPL renders with KaTeX. Larger matrices use Macaulay2 net output, matching Standard top-level output. Set to 0 to always use net output for non-empty matrices.",
+					"scope": "window"
 				}
 			}
 		},
