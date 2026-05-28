@@ -235,7 +235,7 @@
         max-width: none;
       }
 
-      .M2OutputScroll > .M2Html:has(code, pre, samp, span.tt, tt) {
+      .M2OutputScroll > .M2Html:has(code, pre, samp:not(.token), span.tt, tt) {
         display: inline;
         max-width: 100%;
         white-space: normal;
@@ -243,7 +243,7 @@
 
       .M2OutputScroll code,
       .M2OutputScroll pre,
-      .M2OutputScroll samp,
+      .M2OutputScroll samp:not(.token),
       .M2OutputScroll span.tt,
       .M2OutputScroll tt {
         overflow-wrap: anywhere;
