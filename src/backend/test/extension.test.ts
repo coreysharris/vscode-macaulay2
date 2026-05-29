@@ -154,7 +154,7 @@ suite("Extension Tests", function () {
     assert.equal(-1, [1, 2, 3].indexOf(0));
   });
 
-  test("sets Macaulay2 files to an eight-column tab size", function () {
+  test("sets Macaulay2 indentation defaults", function () {
     const manifest = JSON.parse(
       fs.readFileSync(path.join(__dirname, "../../package.json"), "utf8"),
     );
@@ -167,8 +167,9 @@ suite("Extension Tests", function () {
       manifest.contributes.configurationDefaults["[macaulay2]"],
       {
         "editor.detectIndentation": false,
-        "editor.insertSpaces": false,
+        "editor.insertSpaces": true,
         "editor.tabSize": 8,
+        "editor.indentSize": 4,
       },
     );
   });
