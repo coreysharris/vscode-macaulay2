@@ -11,7 +11,7 @@ Install Macaulay2 first, then open a `.m2` file in VS Code. The extension will t
 
 VS Code shows a short **Get Started with Macaulay2** walkthrough after installation, and it remains available from the Getting Started page.
 
-Use `F12` or run **Macaulay2: Start M2 REPL** from the Command Palette to start the webview REPL. Use `Shift+Enter` or `Ctrl+Enter` to send the current selection, or the current line when nothing is selected, to the webview REPL. Use the run button in the editor title area of a `.m2` file to send the whole file to the webview REPL. Sending code to a Macaulay2 terminal session remains available from the Command Palette and right-click editor menu, but has no default keybinding. Both send commands can be rebound in VS Code Keyboard Shortcuts.
+Use `F12` or run **Macaulay2: Start M2 REPL** from the Command Palette to start the webview REPL. Use `Shift+Enter` or `Ctrl+Enter` to send the current selection, or the current line when nothing is selected, to the webview REPL. Use the run button in the editor title area of a `.m2` file to send the whole file to the webview REPL. Sending code to a Macaulay2 terminal session remains available from the Command Palette and right-click editor menu, but has no default keybinding. Both send commands can be rebound in VS Code Keyboard Shortcuts, which can be found by using the settings wheel in the extension menu.
 
 - Optional executable switcher. Set `macaulay2.showExecutableSwitcher` to `true` and add paths to `macaulay2.executablePathAlternatives` to show a status bar button for switching between M2 binaries.
 - This extension comes with a Macaulay2 formatter. When in a `.m2` file, press `Shift+Option+F` to autoformat.
@@ -58,7 +58,8 @@ There is no REPL target setting. To send evaluation to the terminal from a keybi
 | `macaulay2.launchArgs` | `""` | Additional command-line arguments passed to `M2` when starting REPL sessions, for example `--print-width 50`. |
 | `macaulay2.webviewColorTheme` | `vscode` | Choose the webview REPL color theme: `classic`, `light`, `dark`, or `vscode`. |
 | `macaulay2.webviewTopLevelMode` | `webapp` | Choose the webview REPL top-level output mode: `webapp` or `standard`. |
+| `macaulay2.webviewMatrixKatexMaxEntries` | `2500` | Maximum matrix entries the webview REPL renders with KaTeX. Larger matrices use Macaulay2 net output, matching `topLevelMode = Standard`. |
 
 ## Acknowledgements 
 
-This package was developed by John Cobb, Paul Zinn-Justin, and Mike Stillman. This extension was built from a previous version developed by Corey Harris.
+This package was developed by [John Cobb](https://github.com/johndcobb), [Paul Zinn-Justin](https://github.com/pzinn), and [Mike Stillman](https://github.com/mikestillman). This extension was built from a previous version developed by [Corey Harris](https://github.com/coreysharris). The process of finding M2 executables on WSL was adapted from [Al Ashir Intisar](https://github.com/Al-Ashir-Intisar).

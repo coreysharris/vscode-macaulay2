@@ -24,7 +24,12 @@ let proc: ChildProcess | undefined;
 let startReplPromise: Promise<void> | undefined;
 let procWorkingDir: string | undefined;
 let procFileSystem: M2ProcessFileSystem = { kind: "local" };
+let procSourceSearchRoots: string[] = [];
+let terminalWorkingDir: string | undefined;
+let terminalFileSystem: M2ProcessFileSystem = { kind: "local" };
+let terminalSourceSearchRoots: string[] = [];
 const keepWebviewOpenOnProcessClose = new WeakSet<ChildProcess>();
+const closeWebviewOnProcessClose = new WeakSet<ChildProcess>();
 let shouldRestoreEditorFocusAfterWebviewOutput = false;
 let editorToRestoreAfterWebviewOutput: vscode.TextEditor | undefined;
 
@@ -57,6 +62,20 @@ type M2ProcessFileSystem =
   | { kind: "local" }
   | { kind: "wsl"; distroName?: string; hostExecutablePath: string };
 
+type M2PathResolutionContext = {
+  workingDir?: string;
+  fileSystem: M2ProcessFileSystem;
+  sourceSearchRoots: string[];
+};
+
+const defaultWebviewMatrixKatexMaxEntries = 2500;
+
+export type M2OutputFileLocationLink = {
+  index: number;
+  text: string;
+  target: string;
+};
+
 type HelpPanelState = {
   panel: vscode.WebviewPanel;
   currentFilePath: string;
@@ -81,7 +100,18 @@ const helpPanels = new Set<HelpPanelState>();
 // styled Hypertext form. WebApp also overrides some texMath methods through
 // html, which can recurse back into texMath; restore direct LaTeX paths for
 // affected core types.
-export function getM2StartupPatch(): string {
+function normalizeWebviewMatrixKatexMaxEntries(value: number): number {
+  return Number.isFinite(value) && value >= 0
+    ? Math.floor(value)
+    : defaultWebviewMatrixKatexMaxEntries;
+}
+
+export function getM2StartupPatch(
+  matrixKatexMaxEntries = defaultWebviewMatrixKatexMaxEntries,
+): string {
+  const normalizedMatrixKatexMaxEntries =
+    normalizeWebviewMatrixKatexMaxEntries(matrixKatexMaxEntries);
+
   return [
     "try (",
     "local toURLFun, urlEncodeFun, htmlLiteralFun;",
@@ -102,6 +132,22 @@ export function getM2StartupPatch(): string {
     "m := methods f;",
     "if #m > 0 then code m else vscodeM2ExtensionOriginalCodeMethodFunctionWithOptions f);",
     ') else printerr "warning: VS Code code MethodFunctionWithOptions fallback could not be installed";',
+    "try (",
+    "vscodeM2ExtensionOriginalCaptureString = lookup(capture, String);",
+    "capture String := opts -> s -> (",
+    "oldTopLevelMode := topLevelMode;",
+    "topLevelMode = Standard;",
+    "result := try (vscodeM2ExtensionOriginalCaptureString opts) s except err do (topLevelMode = oldTopLevelMode; error err);",
+    "topLevelMode = oldTopLevelMode;",
+    "result);",
+    ') else printerr "warning: VS Code capture fallback could not be installed";',
+    "try (",
+    `vscodeM2ExtensionMatrixKatexMaxEntries = ${normalizedMatrixKatexMaxEntries};`,
+    "vscodeM2ExtensionOriginalHtmlMatrix = lookup(html, Matrix);",
+    "html Matrix := m -> if numRows m * numColumns m > vscodeM2ExtensionMatrixKatexMaxEntries then html net m else vscodeM2ExtensionOriginalHtmlMatrix m;",
+    "vscodeM2ExtensionOriginalHtmlMutableMatrix = lookup(html, MutableMatrix);",
+    "html MutableMatrix := m -> if numRows m * numColumns m > vscodeM2ExtensionMatrixKatexMaxEntries then html net m else vscodeM2ExtensionOriginalHtmlMutableMatrix m;",
+    ') else printerr "warning: VS Code large matrix HTML fallback could not be installed";',
     'try (local lit; lit = value (Core#"private dictionary")#"texMathLiteral"; texMath Type := x -> "\\\\texttt{" | lit toString x | "}") else printerr "warning: VS Code texMath Type fallback could not be installed";',
     'try (local lit; lit = value (Core#"private dictionary")#"texMathLiteral"; texMath Ring := x -> if x.?texMath then x.texMath else "\\\\texttt{" | lit toString x | "}") else printerr "warning: VS Code texMath Ring fallback could not be installed";',
     "try (",
@@ -133,7 +179,7 @@ export function getM2StartupPatch(): string {
 }
 
 function getM2StartupExpression(): string {
-  return getM2StartupPatch();
+  return getM2StartupPatch(getWebviewMatrixKatexMaxEntries());
 }
 
 export function getM2WebviewProcessArgs(
@@ -172,6 +218,17 @@ function getWebviewTopLevelMode(): WebviewTopLevelMode {
     .getConfiguration("macaulay2")
     .get<string>("webviewTopLevelMode", "webapp");
   return configuredMode === "standard" ? "standard" : "webapp";
+}
+
+function getWebviewMatrixKatexMaxEntries(): number {
+  const configuredLength = vscode.workspace
+    .getConfiguration("macaulay2")
+    .get<number>(
+      "webviewMatrixKatexMaxEntries",
+      defaultWebviewMatrixKatexMaxEntries,
+    );
+
+  return normalizeWebviewMatrixKatexMaxEntries(configuredLength);
 }
 
 function postWebviewSettings() {
@@ -259,6 +316,75 @@ function getM2ProcessFileSystem(
     : { kind: "local" };
 }
 
+function addMacaulay2SourceRootsFromExecutable(
+  roots: Set<string>,
+  executablePath: string,
+  fileSystem: M2ProcessFileSystem,
+) {
+  const pathModule = fileSystem.kind === "wsl" ? path.posix : path;
+  const executableDir = pathModule.dirname(executablePath);
+  const prefixDir = pathModule.dirname(executableDir);
+
+  roots.add(pathModule.join(prefixDir, "share", "Macaulay2"));
+  roots.add(pathModule.join(prefixDir, "usr", "share", "Macaulay2"));
+}
+
+function realpathIfAvailable(filePath: string): string | undefined {
+  try {
+    return fs.realpathSync.native(filePath);
+  } catch {
+    try {
+      return fs.realpathSync(filePath);
+    } catch {
+      return undefined;
+    }
+  }
+}
+
+function getMacaulay2SourceSearchRoots(
+  resolution: M2ExecutableResolution,
+  workingDir: string,
+  fileSystem: M2ProcessFileSystem,
+): string[] {
+  const roots = new Set<string>();
+
+  if (fileSystem.kind === "wsl" && resolution.wslExecutablePath) {
+    addMacaulay2SourceRootsFromExecutable(
+      roots,
+      resolution.wslExecutablePath,
+      fileSystem,
+    );
+  } else {
+    addMacaulay2SourceRootsFromExecutable(
+      roots,
+      resolution.executablePath,
+      fileSystem,
+    );
+    const realExecutablePath = realpathIfAvailable(resolution.executablePath);
+    if (realExecutablePath) {
+      addMacaulay2SourceRootsFromExecutable(
+        roots,
+        realExecutablePath,
+        fileSystem,
+      );
+    }
+  }
+
+  if (fileSystem.kind === "wsl") {
+    roots.add(workingDir);
+    for (const folder of vscode.workspace.workspaceFolders || []) {
+      roots.add(windowsPathToWslPath(folder.uri.fsPath));
+    }
+  } else {
+    roots.add(workingDir);
+    for (const folder of vscode.workspace.workspaceFolders || []) {
+      roots.add(folder.uri.fsPath);
+    }
+  }
+
+  return Array.from(roots).filter(Boolean);
+}
+
 function normalizeM2Input(text: string): string {
   // TODO: remove this ... (make sure stuff copied from editor has \n) and fix ctrl-C
   // Filter out empty lines and send to terminal
@@ -270,6 +396,78 @@ function normalizeM2Input(text: string): string {
     text = text + "\n";
   }
   return text;
+}
+
+export function shouldCloseWebviewOnM2Input(text: string): boolean {
+  const executableLines = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !line.startsWith("--"));
+
+  if (executableLines.length !== 1) {
+    return false;
+  }
+
+  return /^(?:exit|quit)(?:\s*\(\s*(?:-?\d+)?\s*\)|\s+-?\d+)?\s*;?$/.test(
+    executableLines[0],
+  );
+}
+
+export function getM2ProcessExitMessage(
+  code: number | null,
+  signal: string | null,
+): string {
+  const detail =
+    signal !== null
+      ? `signal ${signal}`
+      : code !== null
+        ? `exit code ${code}`
+        : "unknown status";
+
+  return `\n[Macaulay2 process exited with ${detail}. Submit input to start a new session.]\n`;
+}
+
+function processInputStreamIsWritable(child: ChildProcess): boolean {
+  const stdin = child.stdin as any;
+  return (
+    !!stdin &&
+    stdin.writable !== false &&
+    stdin.destroyed !== true &&
+    stdin.writableEnded !== true
+  );
+}
+
+function postM2ProcessExitMessage(
+  code: number | null,
+  signal: string | null,
+) {
+  if (!g_panel) return;
+
+  g_panel.webview.postMessage({
+    type: "output",
+    data: getM2ProcessExitMessage(code, signal),
+  });
+}
+
+function postM2InputWriteFailureMessage(error: Error) {
+  if (!g_panel) return;
+
+  g_panel.webview.postMessage({
+    type: "output",
+    data: `\n[Could not send input to Macaulay2: ${error.message}. Submit input again to start a new session.]\n`,
+  });
+}
+
+function handleM2StdinError(child: ChildProcess, error: Error) {
+  console.error("M2 stdin error:", error);
+  if (proc !== child) {
+    return;
+  }
+
+  proc = undefined;
+  closeWebviewOnProcessClose.delete(child);
+  keepWebviewOpenOnProcessClose.delete(child);
+  postM2InputWriteFailureMessage(error);
 }
 
 function startM2() {
@@ -297,6 +495,11 @@ function startM2() {
 
   procWorkingDir = getM2ProcessWorkingDir(resolution, workingDir);
   procFileSystem = getM2ProcessFileSystem(resolution);
+  procSourceSearchRoots = getMacaulay2SourceSearchRoots(
+    resolution,
+    procWorkingDir,
+    procFileSystem,
+  );
 
   child.stdout.on("data", (data) => {
     if (g_panel)
@@ -314,6 +517,10 @@ function startM2() {
       });
   });
 
+  if (child.stdin) {
+    child.stdin.on("error", (err) => handleM2StdinError(child, err));
+  }
+
   child.on("error", (err) => {
     console.error("M2 process error:", err);
     if (g_panel)
@@ -328,7 +535,9 @@ function startM2() {
     console.log("M2 process closed. code=", code, "signal=", signal);
     const closedActiveProcess = proc === child;
     const shouldKeepWebviewOpen = keepWebviewOpenOnProcessClose.has(child);
+    const shouldCloseWebview = closeWebviewOnProcessClose.has(child);
     keepWebviewOpenOnProcessClose.delete(child);
+    closeWebviewOnProcessClose.delete(child);
 
     if (!closedActiveProcess) {
       return;
@@ -341,11 +550,16 @@ function startM2() {
       return;
     }
 
-    if (g_panel) {
+    if (shouldCloseWebview && g_panel) {
       const panel = g_panel;
       g_panel = undefined;
+      procWorkingDir = undefined;
+      procSourceSearchRoots = [];
       panel.dispose();
+      return;
     }
+
+    postM2ProcessExitMessage(code, signal);
   });
 
   /*
@@ -399,12 +613,6 @@ async function startREPLOnce(preserveFocus: boolean) {
           retainContextWhenHidden: true,
           localResourceRoots: [
             vscode.Uri.joinPath(g_context!.extensionUri, "media"),
-            vscode.Uri.joinPath(
-              g_context!.extensionUri,
-              "node_modules",
-              "katex",
-              "dist",
-            ),
           ],
         },
       );
@@ -423,6 +631,8 @@ async function startREPLOnce(preserveFocus: boolean) {
           proc.kill();
           proc = undefined;
         }
+        procWorkingDir = undefined;
+        procSourceSearchRoots = [];
       });
     }
   }
@@ -443,7 +653,11 @@ async function executeCode(
   await startREPL(true);
 
   text = normalizeM2Input(text);
-  if (proc && proc.stdin) {
+  if (proc && proc.stdin && processInputStreamIsWritable(proc)) {
+    const child = proc;
+    if (shouldCloseWebviewOnM2Input(text)) {
+      closeWebviewOnProcessClose.add(child);
+    }
     shouldRestoreEditorFocusAfterWebviewOutput = restoreEditorFocus;
     editorToRestoreAfterWebviewOutput = editorToRestore;
     if (recordSubmittedInput && g_panel) {
@@ -452,7 +666,11 @@ async function executeCode(
         data: text,
       });
     }
-    proc.stdin.write(text);
+    proc.stdin.write(text, (err) => {
+      if (err) {
+        handleM2StdinError(child, err);
+      }
+    });
   } else {
     vscode.window.showErrorMessage("Macaulay2 process is not running.");
   }
@@ -480,6 +698,13 @@ function startM2Terminal(preserveFocus: boolean): vscode.Terminal | undefined {
     getM2TerminalProcessArgs(getM2StartupExpression()),
     workingDir,
     getM2LaunchArgs(),
+  );
+  terminalWorkingDir = getM2ProcessWorkingDir(resolution, workingDir);
+  terminalFileSystem = getM2ProcessFileSystem(resolution);
+  terminalSourceSearchRoots = getMacaulay2SourceSearchRoots(
+    resolution,
+    terminalWorkingDir,
+    terminalFileSystem,
   );
   g_terminal = vscode.window.createTerminal({
     name: "Macaulay2",
@@ -649,31 +874,18 @@ function getWebviewContent(
   );
   html = html.replace("${cssUri}", cssUri.toString());
   const katexCssUri = webview.asWebviewUri(
-    vscode.Uri.joinPath(
-      extensionUri,
-      "node_modules",
-      "katex",
-      "dist",
-      "katex.min.css",
-    ),
+    vscode.Uri.joinPath(extensionUri, "media", "katex", "katex.min.css"),
   );
   html = html.replace("${katexCssUri}", katexCssUri.toString());
   const katexJsUri = webview.asWebviewUri(
-    vscode.Uri.joinPath(
-      extensionUri,
-      "node_modules",
-      "katex",
-      "dist",
-      "katex.min.js",
-    ),
+    vscode.Uri.joinPath(extensionUri, "media", "katex", "katex.min.js"),
   );
   html = html.replace("${katexJsUri}", katexJsUri.toString());
   const katexAutoRenderUri = webview.asWebviewUri(
     vscode.Uri.joinPath(
       extensionUri,
-      "node_modules",
+      "media",
       "katex",
-      "dist",
       "contrib",
       "auto-render.min.js",
     ),
@@ -872,8 +1084,11 @@ function splitFragment(value: string): { pathPart: string; fragment?: string } {
   };
 }
 
-function getVSCodeFilePathForM2Path(filePath: string): string | undefined {
-  if (procFileSystem.kind !== "wsl") {
+function getVSCodeFilePathForM2PathInContext(
+  filePath: string,
+  fileSystem: M2ProcessFileSystem,
+): string | undefined {
+  if (fileSystem.kind !== "wsl") {
     return filePath;
   }
 
@@ -883,9 +1098,13 @@ function getVSCodeFilePathForM2Path(filePath: string): string | undefined {
 
   return wslPathToWindowsPath(
     filePath,
-    procFileSystem.distroName,
-    procFileSystem.hostExecutablePath,
+    fileSystem.distroName,
+    fileSystem.hostExecutablePath,
   );
+}
+
+function getVSCodeFilePathForM2Path(filePath: string): string | undefined {
+  return getVSCodeFilePathForM2PathInContext(filePath, procFileSystem);
 }
 
 function getHelpTargetForM2Path(
@@ -900,12 +1119,15 @@ function getHelpTargetForM2Path(
   };
 }
 
-function resolveM2ProcessFilePath(targetPath: string): string {
+function resolveM2ProcessFilePathInContext(
+  targetPath: string,
+  context: M2PathResolutionContext,
+): string {
   const decodedTargetPath = decodeUriPath(targetPath);
   if (isAbsoluteUri(decodedTargetPath)) {
     const uri = vscode.Uri.parse(decodedTargetPath);
     if (uri.scheme === "file") {
-      return procFileSystem.kind === "wsl" && isUnixAbsolutePath(uri.path)
+      return context.fileSystem.kind === "wsl" && isUnixAbsolutePath(uri.path)
         ? path.posix.normalize(uri.path)
         : uri.fsPath;
     }
@@ -915,20 +1137,83 @@ function resolveM2ProcessFilePath(targetPath: string): string {
     return path.normalize(decodedTargetPath);
   }
 
-  if (procFileSystem.kind === "wsl") {
+  if (context.fileSystem.kind === "wsl") {
     return isUnixAbsolutePath(decodedTargetPath)
       ? path.posix.normalize(decodedTargetPath)
-      : path.posix.resolve(procWorkingDir || "/", decodedTargetPath);
+      : path.posix.resolve(context.workingDir || "/", decodedTargetPath);
   }
 
-  return path.resolve(procWorkingDir || process.cwd(), decodedTargetPath);
+  return path.resolve(context.workingDir || process.cwd(), decodedTargetPath);
 }
 
-function resolveVSCodeFilePathForM2ProcessPath(
+function wslFileExistsInContext(
+  fileSystem: M2ProcessFileSystem,
+  m2FilePath?: string,
+): boolean {
+  if (fileSystem.kind !== "wsl" || !m2FilePath) {
+    return false;
+  }
+
+  try {
+    execFileSync(
+      fileSystem.hostExecutablePath,
+      ["--exec", "test", "-e", m2FilePath],
+      {
+        stdio: "ignore",
+        timeout: 5000,
+      },
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function fileExistsInPathContext(
+  filePath: string | undefined,
+  m2FilePath: string,
+  context: M2PathResolutionContext,
+): boolean {
+  return (
+    (!!filePath && fs.existsSync(filePath)) ||
+    wslFileExistsInContext(context.fileSystem, m2FilePath)
+  );
+}
+
+function resolveVSCodeFilePathForM2OutputPath(
   targetPath: string,
+  context: M2PathResolutionContext,
 ): string | undefined {
-  const processPath = resolveM2ProcessFilePath(targetPath);
-  return getVSCodeFilePathForM2Path(processPath);
+  const directM2Path = resolveM2ProcessFilePathInContext(targetPath, context);
+  const directFilePath = getVSCodeFilePathForM2PathInContext(
+    directM2Path,
+    context.fileSystem,
+  );
+  if (
+    fileExistsInPathContext(directFilePath, directM2Path, context) ||
+    path.isAbsolute(targetPath) ||
+    isWindowsDrivePath(targetPath) ||
+    isAbsoluteUri(targetPath)
+  ) {
+    return directFilePath;
+  }
+
+  const decodedTargetPath = decodeUriPath(targetPath);
+  for (const root of context.sourceSearchRoots) {
+    const candidateM2Path =
+      context.fileSystem.kind === "wsl"
+        ? path.posix.resolve(root, decodedTargetPath)
+        : path.resolve(root, decodedTargetPath);
+    const candidateFilePath = getVSCodeFilePathForM2PathInContext(
+      candidateM2Path,
+      context.fileSystem,
+    );
+    if (fileExistsInPathContext(candidateFilePath, candidateM2Path, context)) {
+      return candidateFilePath;
+    }
+  }
+
+  return directFilePath;
 }
 
 function resolveHelpFilePath(
@@ -992,6 +1277,50 @@ function getMacaulay2DocRoot(filePath: string): string | undefined {
       return parts.slice(0, i + 2).join("/") || path.parse(filePath).root;
     }
   }
+}
+
+function getMacaulay2DocRootForM2Path(filePath: string): string | undefined {
+  const resolvedPath = path.posix.resolve(filePath);
+  const parts = resolvedPath.split("/");
+
+  for (let i = 1; i < parts.length - 1; i++) {
+    if (
+      parts[i - 1] === "share" &&
+      parts[i] === "doc" &&
+      parts[i + 1] === "Macaulay2"
+    ) {
+      return parts.slice(0, i + 2).join("/") || "/";
+    }
+  }
+}
+
+function getHelpSourceSearchRoots(state: HelpPanelState): string[] {
+  const roots = new Set(procSourceSearchRoots);
+  const docRoot = getMacaulay2DocRoot(state.currentFilePath);
+  if (docRoot) {
+    roots.add(path.resolve(docRoot, "..", "..", "Macaulay2"));
+  }
+
+  if (state.currentM2FilePath) {
+    const m2DocRoot = getMacaulay2DocRootForM2Path(state.currentM2FilePath);
+    if (m2DocRoot) {
+      roots.add(path.posix.resolve(m2DocRoot, "..", "..", "Macaulay2"));
+    }
+  }
+
+  return Array.from(roots).filter(Boolean);
+}
+
+function getHelpSourceWorkingDir(state: HelpPanelState): string {
+  if (procWorkingDir) {
+    return procWorkingDir;
+  }
+
+  if (procFileSystem.kind === "wsl" && state.currentM2FilePath) {
+    return path.posix.dirname(state.currentM2FilePath);
+  }
+
+  return path.dirname(state.currentFilePath);
 }
 
 function resolveHelpTarget(
@@ -1365,20 +1694,7 @@ function refreshHelpPanels() {
 }
 
 function wslFileExists(m2FilePath?: string): boolean {
-  if (procFileSystem.kind !== "wsl" || !m2FilePath) {
-    return false;
-  }
-
-  try {
-    execFileSync(
-      procFileSystem.hostExecutablePath,
-      ["--exec", "test", "-e", m2FilePath],
-      { stdio: "ignore", timeout: 5000 },
-    );
-    return true;
-  } catch {
-    return false;
-  }
+  return wslFileExistsInContext(procFileSystem, m2FilePath);
 }
 
 function helpFileExists(filePath: string, m2FilePath?: string): boolean {
@@ -1463,9 +1779,62 @@ function getHelpWebviewContent(
     return true;
   }
 
+  function getSourceLocationTarget(match) {
+    var target = match[1] + "#" + match[2];
+    if (match[3] !== undefined) target += ":" + match[3];
+    if (match[4] !== undefined) {
+      target += "-" + match[4];
+      if (match[5] !== undefined) target += ":" + match[5];
+    }
+    return target;
+  }
+
+  function linkifySourceLocationElement(element) {
+    if (element.children.length > 0) return;
+
+    var text = element.textContent || "";
+    var re = /((?:[A-Za-z]:[\\\\/])?[^\\s:"'<>]+\\.m2):(\\d+)(?::(\\d+))?(?:-(\\d+)(?::(\\d+))?)?/g;
+    var fragment = document.createDocumentFragment();
+    var lastIndex = 0;
+    var match;
+
+    while ((match = re.exec(text)) !== null) {
+      if (match.index > lastIndex) {
+        fragment.appendChild(document.createTextNode(text.substring(lastIndex, match.index)));
+      }
+
+      var anchor = document.createElement("a");
+      anchor.href = "#";
+      anchor.dataset.macaulay2SourceTarget = getSourceLocationTarget(match);
+      anchor.textContent = match[0];
+      fragment.appendChild(anchor);
+      lastIndex = match.index + match[0].length;
+    }
+
+    if (lastIndex === 0) return;
+    if (lastIndex < text.length) {
+      fragment.appendChild(document.createTextNode(text.substring(lastIndex)));
+    }
+    element.textContent = "";
+    element.appendChild(fragment);
+  }
+
+  function linkifySourceLocations() {
+    Array.prototype.forEach.call(document.querySelectorAll("span.tt, tt, code, kbd, samp"), linkifySourceLocationElement);
+  }
+
   document.addEventListener("click", function(event) {
     var anchor = findAnchor(event.target);
     if (!anchor) return;
+
+    var sourceTarget = anchor.dataset.macaulay2SourceTarget;
+    if (sourceTarget) {
+      vscode.postMessage({ type: "openSourceLink", target: sourceTarget });
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.stopImmediatePropagation) event.stopImmediatePropagation();
+      return;
+    }
 
     var href = anchor.dataset.macaulay2HelpHref || anchor.getAttribute("href");
     if (!openHelpLink(href)) return;
@@ -1484,6 +1853,7 @@ function getHelpWebviewContent(
       anchor.setAttribute("href", "#");
     });
 
+    linkifySourceLocations();
     scrollToFragment(requestedFragment);
   });
 }());
@@ -1596,12 +1966,55 @@ function createHelpPanel(
   panel.webview.onDidReceiveMessage((message) => {
     if (message.type === "openHelpLink") {
       openHelpUrl(message.href, state).catch(reportHelpOpenError);
+    } else if (
+      message.type === "openSourceLink" &&
+      typeof message.target === "string" &&
+      message.target.length <= 8192
+    ) {
+      openM2OutputFileTarget(message.target, {
+        workingDir: getHelpSourceWorkingDir(state),
+        fileSystem: procFileSystem,
+        sourceSearchRoots: getHelpSourceSearchRoots(state),
+      }).catch((error) => {
+        console.error("Failed to open Macaulay2 help source link:", error);
+        vscode.window.showErrorMessage(
+          `Failed to open Macaulay2 help source link: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      });
     }
   });
   panel.onDidDispose(() => helpPanels.delete(state));
   helpPanels.add(state);
 
   return state;
+}
+
+export function getM2OutputFileLocationLinks(
+  text: string,
+): M2OutputFileLocationLink[] {
+  const re =
+    /((?:[A-Za-z]:[\\/])?[^\s:"'<>]+\.m2):(\d+)(?::(\d+))?(?:-(\d+)(?::(\d+))?)?/g;
+  const links: M2OutputFileLocationLink[] = [];
+  let match: RegExpExecArray | null;
+
+  while ((match = re.exec(text)) !== null) {
+    const [, filePath, lineNum, colNum, endLineNum, endColNum] = match;
+    let target = `${filePath}#${lineNum}`;
+    if (colNum !== undefined) target += `:${colNum}`;
+    if (endLineNum !== undefined) {
+      target += `-${endLineNum}`;
+      if (endColNum !== undefined) target += `:${endColNum}`;
+    }
+    links.push({
+      index: match.index,
+      text: match[0],
+      target,
+    });
+  }
+
+  return links;
 }
 
 function parseVSCodeFragment(pathWithFragment: string): {
@@ -1631,6 +2044,50 @@ function parseVSCodeFragment(pathWithFragment: string): {
       column: col2 ? parseInt(col2) : 0,
     };
   return result;
+}
+
+async function openM2OutputFileTarget(
+  target: string,
+  context: M2PathResolutionContext,
+) {
+  if (!context.workingDir) {
+    vscode.window.showErrorMessage(
+      "Cannot open Macaulay2 output link because the working directory is unknown.",
+    );
+    return;
+  }
+
+  const { path: relPath, start, end } = parseVSCodeFragment(target);
+  let selection;
+  if (start && end) {
+    selection = new vscode.Range(
+      start.line,
+      start.column,
+      end.line,
+      end.column,
+    );
+  } else if (start) {
+    selection = new vscode.Range(
+      start.line,
+      start.column,
+      start.line,
+      start.column,
+    );
+  }
+  const filePath = resolveVSCodeFilePathForM2OutputPath(relPath, context);
+  if (!filePath) {
+    vscode.window.showErrorMessage(
+      `Cannot open Macaulay2 output link because the WSL path could not be mapped to Windows: ${relPath}`,
+    );
+    return;
+  }
+
+  const fileUri = vscode.Uri.file(filePath);
+  await vscode.window.showTextDocument(fileUri, {
+    preview: false,
+    selection,
+    viewColumn: vscode.ViewColumn.One,
+  });
 }
 
 function interruptM2() {
@@ -1702,6 +2159,7 @@ function handleWebviewMessage(message: any) {
         proc.kill();
       }
       procWorkingDir = undefined; // Reset working directory
+      procSourceSearchRoots = [];
       startM2();
       break;
     case "interrupt":
@@ -1722,43 +2180,18 @@ function handleWebviewMessage(message: any) {
     case "open": {
       const target = getWebviewMessageString(message, 8192);
       if (target === undefined) break;
-      if (!procWorkingDir) {
-        vscode.window.showErrorMessage(
-          "Cannot open Macaulay2 output link because the REPL working directory is unknown.",
-        );
-        break;
-      }
       console.log("open " + target);
-      // fix relative path: relative to where M2 was started
-      const { path: relPath, start, end } = parseVSCodeFragment(target);
-      let selection;
-      if (start && end) {
-        selection = new vscode.Range(
-          start.line,
-          start.column,
-          end.line,
-          end.column,
-        );
-      } else if (start) {
-        selection = new vscode.Range(
-          start.line,
-          start.column,
-          start.line,
-          start.column,
-        );
-      }
-      const filePath = resolveVSCodeFilePathForM2ProcessPath(relPath);
-      if (!filePath) {
+      openM2OutputFileTarget(target, {
+        workingDir: procWorkingDir,
+        fileSystem: procFileSystem,
+        sourceSearchRoots: procSourceSearchRoots,
+      }).catch((error) => {
+        console.error("Failed to open Macaulay2 output link:", error);
         vscode.window.showErrorMessage(
-          `Cannot open Macaulay2 output link because the WSL path could not be mapped to Windows: ${relPath}`,
+          `Failed to open Macaulay2 output link: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
         );
-        break;
-      }
-      const fileUri = vscode.Uri.file(filePath);
-      vscode.window.showTextDocument(fileUri, {
-        preview: false,
-        selection,
-        viewColumn: vscode.ViewColumn.One,
       });
       break;
     }
@@ -1783,6 +2216,49 @@ function handleWebviewMessage(message: any) {
           false,
         ); // restore focus
       break;
+  }
+}
+
+class Macaulay2TerminalLink extends vscode.TerminalLink {
+  constructor(
+    startIndex: number,
+    length: number,
+    readonly target: string,
+  ) {
+    super(startIndex, length, "Open Macaulay2 source");
+  }
+}
+
+class Macaulay2TerminalLinkProvider
+  implements vscode.TerminalLinkProvider<Macaulay2TerminalLink>
+{
+  provideTerminalLinks(
+    context: vscode.TerminalLinkContext,
+    _token: vscode.CancellationToken,
+  ): Macaulay2TerminalLink[] {
+    if (context.terminal !== g_terminal) {
+      return [];
+    }
+
+    return getM2OutputFileLocationLinks(context.line).map(
+      (link) =>
+        new Macaulay2TerminalLink(link.index, link.text.length, link.target),
+    );
+  }
+
+  handleTerminalLink(link: Macaulay2TerminalLink): void {
+    openM2OutputFileTarget(link.target, {
+      workingDir: terminalWorkingDir,
+      fileSystem: terminalFileSystem,
+      sourceSearchRoots: terminalSourceSearchRoots,
+    }).catch((error) => {
+      console.error("Failed to open Macaulay2 terminal link:", error);
+      vscode.window.showErrorMessage(
+        `Failed to open Macaulay2 terminal link: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    });
   }
 }
 
@@ -1828,6 +2304,11 @@ export function activate(
   );
   registerM2ExecutableSwitcher(context, handleM2ExecutableChanged);
   context.subscriptions.push(
+    vscode.window.registerTerminalLinkProvider(
+      new Macaulay2TerminalLinkProvider(),
+    ),
+  );
+  context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration("macaulay2.webviewColorTheme")) {
         postWebviewSettings();
@@ -1839,6 +2320,8 @@ export function activate(
     vscode.window.onDidCloseTerminal((terminal) => {
       if (terminal === g_terminal) {
         g_terminal = undefined;
+        terminalWorkingDir = undefined;
+        terminalSourceSearchRoots = [];
       }
     }),
   );
@@ -1848,9 +2331,13 @@ export function deactivate() {
   if (proc) {
     proc.kill();
     proc = undefined;
+    procWorkingDir = undefined;
+    procSourceSearchRoots = [];
   }
   if (g_terminal) {
     g_terminal.dispose();
     g_terminal = undefined;
+    terminalWorkingDir = undefined;
+    terminalSourceSearchRoots = [];
   }
 }

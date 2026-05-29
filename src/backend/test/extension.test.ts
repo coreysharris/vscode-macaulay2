@@ -26,9 +26,12 @@ import {
   wslPathToWindowsPath,
 } from "../executablePath";
 import {
+  getM2OutputFileLocationLinks,
+  getM2ProcessExitMessage,
   getM2StartupPatch,
   getM2TerminalProcessArgs,
   getM2WebviewProcessArgs,
+  shouldCloseWebviewOnM2Input,
 } from "../repl";
 import { formatMacaulay2Text } from "../formatter";
 
@@ -57,6 +60,21 @@ function getM2StartupPatchCompatibilityScript(): string {
     'filePositionHtml = html new FilePosition from ("stdio", 1, 1)',
     'assert(filePositionHtml === "<samp><a href=\\"stdio#L1:C1\\">stdio:1:1</a></samp>")',
     'assert(texMath Type === "\\\\texttt{Type}")',
+    "oldTopLevelMode = topLevelMode",
+    "topLevelMode = WebApp",
+    '(captureErr, captureOutput) = capture "5+5"',
+    "assert(topLevelMode === WebApp)",
+    "topLevelMode = oldTopLevelMode",
+    "assert(captureErr === false)",
+    'assert(match("i1 : 5[+]5", captureOutput))',
+    'assert(match("o1 = 10", captureOutput))',
+    "assert(all({14, 17, 18, 19, 20, 21, 28, 29, 30}, tag -> not match(ascii tag, captureOutput)))",
+    "vscodeM2ExtensionMatrixKatexMaxEntries = 4",
+    "smallMatrix = random(ZZ^2, ZZ^2)",
+    "largeMatrix = random(ZZ^2, ZZ^3)",
+    'assert(match("array", html smallMatrix))',
+    'assert(match("<pre class=\\"token net\\"", html largeMatrix))',
+    'assert(match("<pre class=\\"token net\\"", html mutableMatrix largeMatrix))',
     'assert(match("-- code for method:", toString code hilbertFunction))',
     `print "${M2_PATCH_COMPATIBILITY_SENTINEL}"`,
   ].join("\n");
@@ -136,7 +154,7 @@ suite("Extension Tests", function () {
     assert.equal(-1, [1, 2, 3].indexOf(0));
   });
 
-  test("sets Macaulay2 files to an eight-column tab size", function () {
+  test("sets Macaulay2 indentation defaults", function () {
     const manifest = JSON.parse(
       fs.readFileSync(path.join(__dirname, "../../package.json"), "utf8"),
     );
@@ -149,8 +167,9 @@ suite("Extension Tests", function () {
       manifest.contributes.configurationDefaults["[macaulay2]"],
       {
         "editor.detectIndentation": false,
-        "editor.insertSpaces": false,
+        "editor.insertSpaces": true,
         "editor.tabSize": 8,
+        "editor.indentSize": 4,
       },
     );
   });
@@ -212,6 +231,79 @@ suite("Macaulay2 Formatter", function () {
       ['x = "a,b;c=>d--e"', "-*raw,block=>comment*-", "y = 1 -- comment"].join(
         "\n",
       ) + "\n",
+    );
+  });
+
+  test("keeps Macaulay2 operators containing equals intact", function () {
+    const operators = [
+      "===>=",
+      "_<=",
+      "|-=",
+      "=!=",
+      "|_=",
+      "!=",
+      "@@=",
+      "=",
+      "..<=",
+      "|=",
+      "===>",
+      ":=",
+      "*=",
+      "??=",
+      "//=",
+      "_>=",
+      "==>=",
+      "^<=",
+      "\\=",
+      "+=",
+      ">>=",
+      "^^=",
+      "..=",
+      "~=",
+      "<=",
+      "\u2298=",
+      "<==>=",
+      "===",
+      "^>=",
+      "==>",
+      "^=",
+      "\u29e2=",
+      "==",
+      "=>",
+      "\u00b7=",
+      "-=",
+      "%=",
+      "\\\\=",
+      "||=",
+      "<<=",
+      "_=",
+      ">=",
+      "&=",
+      "<==",
+      "++=",
+      "@@?=",
+      "^**=",
+      "<===",
+      "<==>",
+      "/=",
+      "**=",
+      "@=",
+    ];
+    const input = operators.map((operator) => `left${operator}right`).join("\n");
+    const expected = operators
+      .map((operator) => `left ${operator} right`)
+      .concat("")
+      .join("\n");
+
+    assert.equal(formatMacaulay2Text(input, { tabSize: 2 }), expected);
+  });
+
+  test("keeps formatted Macaulay2 operators without equals intact", function () {
+    const input = ["f=(x,y)->x++y", "g(a,b;c)"].join("\n");
+
+    assert.equal(
+      formatMacaulay2Text(input, { tabSize: 2 }),
+      ["f = (x, y) -> x ++ y", "g(a, b; c)", ""].join("\n"),
     );
   });
 
@@ -289,8 +381,36 @@ suite("Executable Switcher", function () {
 });
 
 suite("Executable Launch", function () {
+  test("finds Macaulay2 source locations in output", function () {
+    const links = getM2OutputFileLocationLinks(
+      "The source of this document is in Macaulay2Doc/functions/det-doc.m2:25:0.",
+    );
+
+    assert.deepEqual(links, [
+      {
+        index: "The source of this document is in ".length,
+        text: "Macaulay2Doc/functions/det-doc.m2:25:0",
+        target: "Macaulay2Doc/functions/det-doc.m2#25:0",
+      },
+    ]);
+  });
+
+  test("finds Macaulay2 source ranges in output", function () {
+    const links = getM2OutputFileLocationLinks(
+      "/opt/homebrew/share/Macaulay2/Core/files.m2:189:15-189:31: --source code",
+    );
+
+    assert.deepEqual(links, [
+      {
+        index: 0,
+        text: "/opt/homebrew/share/Macaulay2/Core/files.m2:189:15-189:31",
+        target: "/opt/homebrew/share/Macaulay2/Core/files.m2#189:15-189:31",
+      },
+    ]);
+  });
+
   test("patches method function code output for WebApp mode", function () {
-    const patch = getM2StartupPatch();
+    const patch = getM2StartupPatch(4);
 
     assert.notEqual(patch.indexOf("html FilePosition := p ->"), -1);
     assert.notEqual(
@@ -298,6 +418,16 @@ suite("Executable Launch", function () {
       -1,
     );
     assert.notEqual(patch.indexOf("if #m > 0 then code m"), -1);
+    assert.notEqual(
+      patch.indexOf("vscodeM2ExtensionMatrixKatexMaxEntries = 4;"),
+      -1,
+    );
+    assert.notEqual(
+      patch.indexOf(
+        "html Matrix := m -> if numRows m * numColumns m > vscodeM2ExtensionMatrixKatexMaxEntries then html net m",
+      ),
+      -1,
+    );
   });
 
   test("startup patch works against the installed Macaulay2 runtime", function () {
@@ -357,6 +487,31 @@ suite("Executable Launch", function () {
       "-e",
       "startupPatch",
     ]);
+  });
+
+  test("closes the output webview only for explicit exit input", function () {
+    assert.equal(shouldCloseWebviewOnM2Input("exit\n"), true);
+    assert.equal(shouldCloseWebviewOnM2Input(" quit; \n"), true);
+    assert.equal(shouldCloseWebviewOnM2Input("exit(0)\n"), true);
+    assert.equal(shouldCloseWebviewOnM2Input("exit()\n"), true);
+    assert.equal(shouldCloseWebviewOnM2Input("quit( -1 )\n"), true);
+
+    assert.equal(shouldCloseWebviewOnM2Input("2+2\n"), false);
+    assert.equal(shouldCloseWebviewOnM2Input("2+2\nexit\n"), false);
+    assert.equal(shouldCloseWebviewOnM2Input("-- exit\n"), false);
+    assert.equal(shouldCloseWebviewOnM2Input("exitStatus\n"), false);
+    assert.equal(shouldCloseWebviewOnM2Input("exit(-)\n"), false);
+  });
+
+  test("describes unexpected Macaulay2 process exits", function () {
+    assert.equal(
+      getM2ProcessExitMessage(0, null),
+      "\n[Macaulay2 process exited with exit code 0. Submit input to start a new session.]\n",
+    );
+    assert.equal(
+      getM2ProcessExitMessage(null, "SIGTERM"),
+      "\n[Macaulay2 process exited with signal SIGTERM. Submit input to start a new session.]\n",
+    );
   });
 
   test("normalizes configured M2 launch arguments", function () {

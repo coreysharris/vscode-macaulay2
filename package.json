@@ -2,7 +2,8 @@
 	"name": "macaulay2",
 	"displayName": "Macaulay2",
 	"description": "Macaulay2 language support",
-	"version": "0.9.0",
+	"version": "0.9.1",
+	"license": "MIT",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/coreysharris/vscode-macaulay2"
@@ -146,6 +147,13 @@
 					],
 					"description": "Controls the top-level output mode used by the Macaulay2 webview REPL.",
 					"scope": "window"
+				},
+				"macaulay2.webviewMatrixKatexMaxEntries": {
+					"type": "number",
+					"default": 2500,
+					"minimum": 0,
+					"description": "Maximum matrix entries the webview REPL renders with KaTeX. Larger matrices use Macaulay2 net output, matching Standard top-level output. Set to 0 to always use net output for non-empty matrices.",
+					"scope": "window"
 				}
 			}
 		},
@@ -211,7 +219,7 @@
 					{
 						"id": "configureM2",
 						"title": "Configure Extension",
-						"description": "You can change the start up behavior, visual theme, and other settings.\n\n[Open Macaulay2 Settings](command:workbench.action.openSettings?%5B%22%40ext%3AM2.macaulay2%22%5D)\n\nAll keybindings can be viewed and edited.\n\n[Open Macaulay2 Keyboard Shortcuts](command:workbench.action.openGlobalKeybindings?%5B%22%40ext%3Am2.macaulay2%22%5D)",
+						"description": "You can change the start up behavior, visual theme, and other settings.\n\n[Open Macaulay2 Settings](command:workbench.action.openSettings?%5B%22%40ext%3Acoreysharris.macaulay2%22%5D)\n\nAll keybindings can be viewed and edited.\n\n[Open Macaulay2 Keyboard Shortcuts](command:workbench.action.openGlobalKeybindings?%5B%22%40ext%3Acoreysharris.macaulay2%22%5D)",
 						"media": {
 							"markdown": "walkthroughs/configure-m2.md"
 						},
@@ -264,14 +272,13 @@
 		"markdown.markdownItPlugins": true
 	},
 	"scripts": {
-		"vscode:prepublish": "npm run compile",
-		"compile": "tsc -p tsconfig.backend.json && tsc -p tsconfig.webview.json && npm run check-webview-assets",
+		"vscode:prepublish": "node esbuild.js --production",
+		"compile": "node esbuild.js && npm run check-webview-assets",
+		"compile-tests": "node esbuild.js --test",
 		"check-webview-assets": "node scripts/check-webview-assets.js",
-		"watch-backend": "tsc -w -p tsconfig.backend.json --pretty false --preserveWatchOutput",
-		"watch-webview": "tsc -w -p tsconfig.webview.json --pretty false --preserveWatchOutput",
-		"watch": "npm-run-all --parallel watch-backend watch-webview",
+		"watch": "node esbuild.js --watch",
 		"clean": "rimraf node_modules out dist package-lock.json",
-		"test": "rimraf out/test && npm run compile && vscode-test",
+		"test": "rimraf out/test && npm run compile && npm run compile-tests && vscode-test",
 		"update": "M2 --script generate-grammar.m2",
 		"format": "prettier --write src/*/*.ts"
 	},
@@ -281,15 +288,13 @@
 		"@types/vscode": "^1.100.0",
 		"@vscode/test-cli": "^0.0.10",
 		"@vscode/test-electron": "^2.5.2",
-		"npm-run-all": "^4.1.5",
-		"rimraf": "^6.0.1",
-		"tslint": "^5.12.1",
-		"typescript": "^5.4.0",
-		"prettier": "^3.5.3"
-	},
-	"dependencies": {
+		"esbuild": "^0.28.0",
 		"highlight.js": "^11.11.1",
 		"highlightjs-macaulay2": "^0.4.2",
-		"katex": "^0.16.47"
+		"katex": "^0.16.47",
+		"prettier": "^3.5.3",
+		"rimraf": "^6.0.1",
+		"tslint": "^5.12.1",
+		"typescript": "^5.4.0"
 	}
 }
