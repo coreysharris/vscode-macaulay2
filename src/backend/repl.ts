@@ -613,12 +613,6 @@ async function startREPLOnce(preserveFocus: boolean) {
           retainContextWhenHidden: true,
           localResourceRoots: [
             vscode.Uri.joinPath(g_context!.extensionUri, "media"),
-            vscode.Uri.joinPath(
-              g_context!.extensionUri,
-              "node_modules",
-              "katex",
-              "dist",
-            ),
           ],
         },
       );
@@ -880,31 +874,18 @@ function getWebviewContent(
   );
   html = html.replace("${cssUri}", cssUri.toString());
   const katexCssUri = webview.asWebviewUri(
-    vscode.Uri.joinPath(
-      extensionUri,
-      "node_modules",
-      "katex",
-      "dist",
-      "katex.min.css",
-    ),
+    vscode.Uri.joinPath(extensionUri, "media", "katex", "katex.min.css"),
   );
   html = html.replace("${katexCssUri}", katexCssUri.toString());
   const katexJsUri = webview.asWebviewUri(
-    vscode.Uri.joinPath(
-      extensionUri,
-      "node_modules",
-      "katex",
-      "dist",
-      "katex.min.js",
-    ),
+    vscode.Uri.joinPath(extensionUri, "media", "katex", "katex.min.js"),
   );
   html = html.replace("${katexJsUri}", katexJsUri.toString());
   const katexAutoRenderUri = webview.asWebviewUri(
     vscode.Uri.joinPath(
       extensionUri,
-      "node_modules",
+      "media",
       "katex",
-      "dist",
       "contrib",
       "auto-render.min.js",
     ),
