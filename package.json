@@ -3,6 +3,7 @@
 	"displayName": "Macaulay2",
 	"description": "Macaulay2 language support",
 	"version": "0.9.1",
+	"license": "MIT",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/coreysharris/vscode-macaulay2"
