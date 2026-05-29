@@ -194,6 +194,8 @@ const Shell = function (
 
     return links;
   };
+  // Bound cross-chunk rescans while still catching normal split file locations.
+  const m2FileLocationChunkTailLength = 4096;
   const shouldSkipM2FileLocationTextNode = function (node: Node) {
     const parent = node.parentElement;
     if (!parent) return true;
@@ -217,7 +219,7 @@ const Shell = function (
 
       const link = document.createElement("a");
       link.textContent = linkInfo.text;
-      link.href = linkInfo.target;
+      link.href = "#";
       link.title = "Open source";
       link.style.textDecoration = "underline";
       link.style.cursor = "pointer";
@@ -236,6 +238,29 @@ const Shell = function (
     }
 
     node.replaceWith(fragment);
+  };
+  const linkifyM2FileLocationTextNodeWithPreviousTail = function (node: Text) {
+    if (shouldSkipM2FileLocationTextNode(node)) return;
+
+    const previous = node.previousSibling;
+    if (
+      previous instanceof Text &&
+      !shouldSkipM2FileLocationTextNode(previous)
+    ) {
+      const previousText = previous.nodeValue || "";
+      const nodeText = node.nodeValue || "";
+      if (previousText.length > m2FileLocationChunkTailLength) {
+        const splitIndex = previousText.length - m2FileLocationChunkTailLength;
+        previous.nodeValue = previousText.substring(0, splitIndex);
+        node.nodeValue = previousText.substring(splitIndex) + nodeText;
+      } else {
+        previous.nodeValue = previousText + nodeText;
+        node.remove();
+        node = previous;
+      }
+    }
+
+    linkifyM2FileLocationTextNode(node);
   };
   const linkifyM2FileLocations = function (container: Node) {
     container.normalize();
@@ -1813,40 +1838,9 @@ const Shell = function (
       else target.appendChild(node);
     };
 
-    const fileLocationLinks = getM2FileLocationLinks(msg);
-    if (fileLocationLinks.length > 0) {
-      let lastIndex = 0;
-
-      for (const fileLocationLink of fileLocationLinks) {
-        if (fileLocationLink.index > lastIndex)
-          appendNode(
-            document.createTextNode(
-              msg.substring(lastIndex, fileLocationLink.index),
-            ),
-          );
-
-        const link = document.createElement("a");
-        link.textContent = fileLocationLink.text;
-        link.href = "#";
-        link.title = "Open source";
-        link.style.textDecoration = "underline";
-        link.style.cursor = "pointer";
-        link.onclick = (e) => {
-          e.preventDefault();
-          emit("open", fileLocationLink.target);
-        };
-        appendNode(link);
-
-        lastIndex = fileLocationLink.index + fileLocationLink.text.length;
-      }
-
-      if (lastIndex < msg.length)
-        appendNode(document.createTextNode(msg.substring(lastIndex)));
-    } else {
-      const node = document.createTextNode(msg);
-      appendNode(node);
-    }
-    linkifyM2FileLocations(target);
+    const node = document.createTextNode(msg);
+    appendNode(node);
+    linkifyM2FileLocationTextNodeWithPreviousTail(node);
     if (target != htmlSec) queueOutputScrollStateUpdate(target);
   };
 
