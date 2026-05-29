@@ -2052,7 +2052,7 @@ async function openM2OutputFileTarget(
 ) {
   if (!context.workingDir) {
     vscode.window.showErrorMessage(
-      "Cannot open Macaulay2 output link because the REPL working directory is unknown.",
+      "Cannot open Macaulay2 output link because the working directory is unknown.",
     );
     return;
   }
