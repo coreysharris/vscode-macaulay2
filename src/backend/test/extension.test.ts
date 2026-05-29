@@ -493,11 +493,14 @@ suite("Executable Launch", function () {
     assert.equal(shouldCloseWebviewOnM2Input("exit\n"), true);
     assert.equal(shouldCloseWebviewOnM2Input(" quit; \n"), true);
     assert.equal(shouldCloseWebviewOnM2Input("exit(0)\n"), true);
+    assert.equal(shouldCloseWebviewOnM2Input("exit()\n"), true);
+    assert.equal(shouldCloseWebviewOnM2Input("quit( -1 )\n"), true);
 
     assert.equal(shouldCloseWebviewOnM2Input("2+2\n"), false);
     assert.equal(shouldCloseWebviewOnM2Input("2+2\nexit\n"), false);
     assert.equal(shouldCloseWebviewOnM2Input("-- exit\n"), false);
     assert.equal(shouldCloseWebviewOnM2Input("exitStatus\n"), false);
+    assert.equal(shouldCloseWebviewOnM2Input("exit(-)\n"), false);
   });
 
   test("describes unexpected Macaulay2 process exits", function () {

@@ -408,7 +408,7 @@ export function shouldCloseWebviewOnM2Input(text: string): boolean {
     return false;
   }
 
-  return /^(?:exit|quit)(?:\s*\(\s*-?\d*\s*\)|\s+-?\d+)?\s*;?$/.test(
+  return /^(?:exit|quit)(?:\s*\(\s*(?:-?\d+)?\s*\)|\s+-?\d+)?\s*;?$/.test(
     executableLines[0],
   );
 }
