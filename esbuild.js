@@ -4,6 +4,7 @@ const path = require("path");
 
 const production = process.argv.includes("--production");
 const watch = process.argv.includes("--watch");
+const test = process.argv.includes("--test");
 
 const baseConfig = {
   bundle: true,
@@ -12,6 +13,27 @@ const baseConfig = {
 };
 
 async function build() {
+  if (test) {
+    const testCtx = await esbuild.context({
+      ...baseConfig,
+      entryPoints: ["src/backend/test/extension.test.ts"],
+      outfile: "out/test/extension.test.js",
+      platform: "node",
+      format: "cjs",
+      target: "node18",
+      external: ["vscode"],
+    });
+
+    if (watch) {
+      await testCtx.watch();
+      console.log("Watching tests...");
+    } else {
+      await testCtx.rebuild();
+      await testCtx.dispose();
+    }
+    return;
+  }
+
   const backendCtx = await esbuild.context({
     ...baseConfig,
     entryPoints: ["src/backend/extension.ts"],

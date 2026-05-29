@@ -273,10 +273,11 @@
 	"scripts": {
 		"vscode:prepublish": "node esbuild.js --production",
 		"compile": "node esbuild.js && npm run check-webview-assets",
+		"compile-tests": "node esbuild.js --test",
 		"check-webview-assets": "node scripts/check-webview-assets.js",
 		"watch": "node esbuild.js --watch",
 		"clean": "rimraf node_modules out dist package-lock.json",
-		"test": "rimraf out/test && npm run compile && vscode-test",
+		"test": "rimraf out/test && npm run compile && npm run compile-tests && vscode-test",
 		"update": "M2 --script generate-grammar.m2",
 		"format": "prettier --write src/*/*.ts"
 	},
